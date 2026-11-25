@@ -6,6 +6,22 @@ import { useEffect, useState } from "react";
 import type { Entry, Farm, Parcel } from "./types";
 import { cropById, LEGACY } from "./agro";
 
+export const DEFAULT_IRRIGATION: Parcel["irrigation"] = {
+  system: "secano",
+  efficiency: 1,
+  emitterFlowLh: 2.2,
+  emitterSpacingM: 0.5,
+  lateralsPerRow: 1,
+  emittersPerPlant: null,
+  wetPct: null,
+  cu: 0.9,
+  ceWater: 1,
+  hoursPerDay: 20,
+  rateMmH: 6,
+  waterNitrateMgL: 0,
+  seasonVolumeM3Ha: 0,
+};
+
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
 type State = {
@@ -89,21 +105,7 @@ export function useHydrated() {
   return h;
 }
 
-export const DEFAULT_IRRIGATION: Parcel["irrigation"] = {
-  system: "secano",
-  efficiency: 1,
-  emitterFlowLh: 2.2,
-  emitterSpacingM: 0.5,
-  lateralsPerRow: 1,
-  emittersPerPlant: null,
-  wetPct: null,
-  cu: 0.9,
-  ceWater: 1,
-  hoursPerDay: 20,
-  rateMmH: 6,
-  waterNitrateMgL: 0,
-  seasonVolumeM3Ha: 0,
-};
+
 
 /** Datos guardados con la versión 1 → formato actual. */
 export function upgradeParcel(p: Parcel): Parcel {

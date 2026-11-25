@@ -33,6 +33,8 @@ type Props = {
   showSigpac?: boolean;
   interactive?: boolean;
   terrain?: number | null; // exageración del relieve; null = mapa plano
+  demTiles?: string | null; // teselas de relieve propias (MDT del IGN o plano de AutoCAD)
+  onReady?: (map: maplibregl.Map) => void;
   drawing?: boolean;
   drawPoints?: [number, number][];
   pick?: SigpacPick | null;
@@ -96,6 +98,7 @@ export default function FarmMap(props: Props) {
       container: box.current,
       style: {
         version: 8,
+        glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
         sources: {
           pnoa: { type: "raster", tiles: [PNOA], tileSize: 256, maxzoom: 19, attribution: "Ortofoto PNOA © Instituto Geográfico Nacional" },
           ign: { type: "raster", tiles: [IGNBASE], tileSize: 256, maxzoom: 18, attribution: "Mapa base © Instituto Geográfico Nacional" },
@@ -135,9 +138,10 @@ export default function FarmMap(props: Props) {
     map.on("load", () => {
       ready.current = true;
       if (!p.initialView && b) map.fitBounds(b, { padding: 60, duration: 0, maxZoom: 16 });
-      applyTerrain(map, cb.current.terrain ?? null);
+      applyTerrain(map, cb.current.terrain ?? null, cb.current.demTiles);
       renderMarkers();
       cb.current.onZoomChange?.(map.getZoom());
+      cb.current.onReady?.(map);
     });
 
     map.on("moveend", () => {
@@ -145,6 +149,29 @@ export default function FarmMap(props: Props) {
       cb.current.onViewChange?.({ center: [c.lng, c.lat], zoom: map.getZoom() });
     });
     map.on("zoom", () => cb.current.onZoomChange?.(map.getZoom()));
+
+    // Si el relieve llega mientras la cámara se mueve, MapLibre se queda con la cota del centro a 0:
+    // al quedar quieto, se recoloca la cámara sobre el terreno real.
+    let elevT: ReturnType<typeof setTimeout> | undefined;
+    let fixes: number[] = [];
+    const fixElevation = () => {
+      clearTimeout(elevT);
+      elevT = setTimeout(() => {
+        if (!map.getTerrain() || map.isMoving()) return;
+        const real = map.queryTerrainElevation(map.getCenter());
+        const now = Date.now();
+        fixes = fixes.filter((t) => now - t < 10000);
+        if (real != null && Math.abs(real - map.getCenterElevation()) > 3 && fixes.length < 3) {
+          fixes.push(now);
+          // freezeElevation: al terminar, MapLibre recalcula la cota del centro con el relieve cargado
+          map.easeTo({ center: map.getCenter(), duration: 300, freezeElevation: true });
+        }
+      }, 400);
+    };
+    map.on("moveend", fixElevation);
+    map.on("sourcedata", (e) => {
+      if (e.sourceId === "dem" && e.tile) fixElevation();
+    });
 
     map.on("mousemove", (e) => {
       const c = cb.current;
@@ -258,8 +285,8 @@ export default function FarmMap(props: Props) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready.current) return;
-    applyTerrain(map, props.terrain ?? null);
-  }, [props.terrain]);
+    applyTerrain(map, props.terrain ?? null, props.demTiles);
+  }, [props.terrain, props.demTiles]);
 
   const padKey = props.padding ? Object.values(props.padding).join(",") : "";
   useEffect(() => {
@@ -286,7 +313,7 @@ export default function FarmMap(props: Props) {
       const [w, so, e, n] = props.fitTo!.bounds;
       // con el mapa inclinado, la finca queda lejos del centro: se adelanta el centro hacia el norte
       const center: [number, number] = terr ? [(w + e) / 2, (so + n) / 2 + (n - so) * 0.28] : [(w + e) / 2, (so + n) / 2];
-      map.easeTo({ center, zoom: Math.min(17, (cam.zoom ?? 15) - (terr ? 0.7 : 0)), pitch: terr ? 52 : map.getPitch(), bearing: terr ? -12 : 0, duration: 1300 });
+      map.easeTo({ center, zoom: Math.min(17, (cam.zoom ?? 15) - (terr ? 0.7 : 0)), pitch: terr ? 52 : map.getPitch(), bearing: terr ? -12 : 0, duration: 1300, freezeElevation: true });
     };
     if (ready.current) go();
     else map.once("load", go);
@@ -331,17 +358,28 @@ function buildPick(map: maplibregl.Map, f: MapGeoJSONFeature): SigpacPick {
   };
 }
 
-function applyTerrain(map: maplibregl.Map, ex: number | null) {
+const demUrl = new WeakMap<maplibregl.Map, string>();
+
+function applyTerrain(map: maplibregl.Map, ex: number | null, tiles?: string | null) {
   if (ex == null) {
     if (map.getTerrain()) map.setTerrain(null);
     if (map.getLayer("hillshade")) map.removeLayer("hillshade");
     return;
   }
+  const url = tiles || DEM;
+  if (demUrl.get(map) !== url && map.getSource("dem")) {
+    map.setTerrain(null);
+    if (map.getLayer("hillshade")) map.removeLayer("hillshade");
+    map.removeSource("dem");
+    map.removeSource("dem-shade");
+  }
+  demUrl.set(map, url);
+  const attribution = tiles ? "Relieve: MDT LiDAR © IGN y Terrain Tiles (AWS / Mapzen)" : "Relieve: Terrain Tiles (AWS / Mapzen)";
   if (!map.getSource("dem")) {
-    map.addSource("dem", { type: "raster-dem", tiles: [DEM], tileSize: 256, maxzoom: 15, encoding: "terrarium", attribution: "Relieve: Terrain Tiles (AWS / Mapzen)" });
+    map.addSource("dem", { type: "raster-dem", tiles: [url], tileSize: 256, maxzoom: 15, encoding: "terrarium", attribution });
   }
   if (!map.getSource("dem-shade")) {
-    map.addSource("dem-shade", { type: "raster-dem", tiles: [DEM], tileSize: 256, maxzoom: 15, encoding: "terrarium" });
+    map.addSource("dem-shade", { type: "raster-dem", tiles: [url], tileSize: 256, maxzoom: 15, encoding: "terrarium" });
   }
   if (!map.getLayer("hillshade")) {
     map.addLayer({ id: "hillshade", type: "hillshade", source: "dem-shade", paint: { "hillshade-exaggeration": 0.35, "hillshade-shadow-color": "#14201A" } }, "sigpac-fill");

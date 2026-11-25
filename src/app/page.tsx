@@ -15,7 +15,7 @@ function Shot({ src, alt, w, h, className = "", priority = false }: { src: strin
 const STEPS = [
   { n: "01", t: "Marca tus recintos", d: "Buscas tu municipio, te acercas y haces clic en cada recinto SIGPAC. Superficie, uso, pendiente y altitud se rellenan solos." },
   { n: "02", t: "Dile qué tienes", d: "Cultivo, suelo y sistema de riego. Si tienes análisis de suelo, mejor: el abonado se ajusta a él." },
-  { n: "03", t: "Deja que haga las cuentas", d: "Cada día recalcula el agua del suelo con la lluvia de tu parcela, te dice cuándo regar y cuánto abonar, y te lleva el cuaderno." },
+  { n: "03", t: "Deja que haga las cuentas", d: "Calcula el riego del año con el clima histórico de tu parcela, el abonado con tu análisis y el relieve con el LiDAR del IGN. Y te lleva el cuaderno." },
 ];
 
 export default function Home() {
@@ -33,7 +33,7 @@ export default function Home() {
               Marca tu finca en el mapa. <span className="text-olivo italic">Tempero</span> hace las cuentas.
             </h1>
             <p className="max-w-[34rem] animate-rise text-[19px] leading-relaxed text-tinta-2 [animation-delay:160ms]">
-              Lluvia de cada parcela, cuándo y cuánto regar, el plan de abonado y el cuaderno de campo. Todo sobre la ortofoto de tu explotación.
+              El agua de riego de cada parcela, el diseño del goteo, el plan de abonado, el relieve en 3D y el cuaderno de campo. Todo sobre la ortofoto de tu explotación.
             </p>
             <div className="flex animate-rise flex-wrap items-center gap-x-6 gap-y-3 [animation-delay:240ms]">
               <Link href="/app/mapa" className="btn btn-primary h-13 rounded-[14px] px-6 text-[16px]">Empezar con mis parcelas</Link>
@@ -61,8 +61,9 @@ export default function Home() {
           <span className="font-semibold text-tinta">Con datos oficiales y abiertos</span>
           <span>Ortofoto PNOA · IGN</span>
           <span>Recintos SIGPAC · FEGA</span>
-          <span>Lluvia y evapotranspiración · Open-Meteo</span>
-          <span>Relieve · Terrain Tiles</span>
+          <span>10 años de clima diario · Open-Meteo</span>
+          <span>Relieve LiDAR · IGN</span>
+          <span>Cultivos · FAO-56</span>
         </div>
       </div>
 
@@ -86,17 +87,17 @@ export default function Home() {
       <section id="riego" className="scroll-mt-24 bg-white">
         <div className="mx-auto grid max-w-[1280px] items-center gap-12 px-5 py-24 sm:px-8 lg:grid-cols-[minmax(0,4fr)_minmax(0,7fr)] lg:py-28">
           <Reveal className="flex flex-col gap-5">
-            <span className="text-[13px] font-bold tracking-[0.08em] text-acequia">LLUVIA Y RIEGO</span>
-            <h2 className="font-display text-[clamp(32px,3.6vw,48px)] leading-[1.05] font-semibold tracking-[-0.02em]">Riega cuando el suelo lo pide, no cuando toca.</h2>
-            <p className="text-[17px] leading-relaxed text-tinta-2">Tempero lleva el balance de agua de cada parcela: lo que llueve, lo que consume el cultivo y lo que aguanta tu suelo. Te avisa el día que baja del umbral y te dice los milímetros, los metros cúbicos y las horas de goteo.</p>
+            <span className="text-[13px] font-bold tracking-[0.08em] text-acequia">RIEGO</span>
+            <h2 className="font-display text-[clamp(32px,3.6vw,48px)] leading-[1.05] font-semibold tracking-[-0.02em]">El agua que necesita tu riego, calculada de verdad.</h2>
+            <p className="text-[17px] leading-relaxed text-tinta-2">Con 10 años de clima diario de tu parcela, Tempero calcula mes a mes las necesidades del cultivo (FAO-56) y las del riego que pongas: en goteo, los goteros por planta, el tiempo de riego, los sectores y el caudal; en aspersión o pívot, la dosis y cada cuántos días.</p>
             <ul className="mt-1 flex flex-col gap-2.5 text-[15.5px]">
-              <li className="flex gap-3"><span className="mt-2 h-1.5 w-4 flex-none rounded-full bg-acequia" />Lluvia de los últimos 60 días y previsión de la semana</li>
-              <li className="flex gap-3"><span className="mt-2 h-1.5 w-4 flex-none rounded-full bg-acequia" />Goteo, aspersión, pívot o surcos, con su eficiencia</li>
-              <li className="flex gap-3"><span className="mt-2 h-1.5 w-4 flex-none rounded-full bg-acequia" />«Marcar como regado» y queda anotado en el cuaderno</li>
+              <li className="flex gap-3"><span className="mt-2 h-1.5 w-4 flex-none rounded-full bg-acequia" />Plan anual en mm y m³ por parcela, con el año mediano y los extremos</li>
+              <li className="flex gap-3"><span className="mt-2 h-1.5 w-4 flex-none rounded-full bg-acequia" />Diseño agronómico del goteo: lavado de sales, uniformidad y superficie mojada</li>
+              <li className="flex gap-3"><span className="mt-2 h-1.5 w-4 flex-none rounded-full bg-acequia" />Balance de esta semana con la previsión, y cada riego al cuaderno</li>
             </ul>
           </Reveal>
           <Reveal delay={120}>
-            <Shot src="/shots/riego.webp" alt="Gráfico de balance hídrico con la lluvia, el consumo del cultivo y el agua útil del suelo" w={1600} h={1000} />
+            <Shot src="/shots/riego.webp" alt="Plan anual de riego con las necesidades del cultivo mes a mes" w={1600} h={1000} />
           </Reveal>
         </div>
       </section>
@@ -141,8 +142,8 @@ export default function Home() {
         <div className="relative mx-auto flex min-h-[620px] max-w-[1280px] flex-col justify-center gap-6 px-5 py-24 text-white sm:px-8">
           <Reveal className="flex max-w-xl flex-col gap-5">
             <span className="text-[13px] font-bold tracking-[0.08em] text-olivo-vivo">TERRENO 3D</span>
-            <h2 className="font-display text-[clamp(34px,4vw,56px)] leading-[1.02] font-semibold tracking-[-0.02em]">Tu finca en relieve, con la ortofoto encima.</h2>
-            <p className="text-[17px] leading-relaxed text-[oklch(0.86_0.012_150)]">Gírala, inclínala y exagera el relieve para ver las lomas y las vaguadas. Muy pronto: curvas de nivel, el agua bajando por el terreno y tu plano de AutoCAD.</p>
+            <h2 className="font-display text-[clamp(34px,4vw,56px)] leading-[1.02] font-semibold tracking-[-0.02em]">Mira por dónde se va el agua de tu finca.</h2>
+            <p className="text-[17px] leading-relaxed text-[oklch(0.86_0.012_150)]">Relieve LiDAR del IGN a 5 m o tu plano de AutoCAD (DXF o LandXML), con curvas de nivel y el agua animada bajando por la pendiente. Te dice por dónde sale, cuánta superficie drena a cada punto y dónde se encharca.</p>
             <Link href="/app/terreno" className="btn mt-2 self-start bg-white text-olivo-oscuro shadow-[0_2px_0_oklch(0.8_0.02_150)] hover:bg-olivo-claro">Ver mi terreno en 3D</Link>
           </Reveal>
         </div>
