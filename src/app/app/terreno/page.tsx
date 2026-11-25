@@ -3,8 +3,6 @@
 import dynamic from "next/dynamic";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type maplibregl from "maplibre-gl";
-import type { GeoJSONSource } from "maplibre-gl";
 import { TopBar } from "@/components/Sidebar";
 import { EmptyParcels, Notice } from "@/components/ui";
 import { useHydrated, useStore } from "@/lib/store";
@@ -12,14 +10,29 @@ import { boundsOf, centerOf } from "@/lib/geo";
 import { cropById } from "@/lib/agro";
 import { ha, nf } from "@/lib/format";
 import { bboxSizeM, fetchIgnDem, padBBox, sample, type Dem } from "@/lib/dem";
-import { analyse, contourLines, contourStep, exitPoints, maskOf, poolPolygons, stats, streams, type Hydro } from "@/lib/hydro";
-import { setDemLayers } from "@/lib/demTiles";
+import { analyse, contourLines, contourStep, maskOf, poolPolygons, stats, streams, type Hydro } from "@/lib/hydro";
+import type { MaquetaApi } from "@/components/terreno/Maqueta";
+import type { Parcel } from "@/lib/types";
 import { CRS, buildModel, guessCrs, loadModel, modelDem, parseCad, saveModel, type CadData, type CadModel, type CrsId } from "@/lib/cad";
-import { TIME_SCALE, WaterSim } from "@/lib/flow";
+import { TIME_SCALE } from "@/lib/flow";
 
-const FarmMap = dynamic(() => import("@/components/FarmMap"), { ssr: false, loading: () => <div className="absolute inset-0 bg-noche" /> });
+const Maqueta = dynamic(() => import("@/components/terreno/Maqueta"), { ssr: false });
 
-const EMPTY = { type: "FeatureCollection" as const, features: [] };
+/** Agrupa las parcelas en fincas: las que están a menos de ~400 m unas de otras van juntas. */
+function fincas(parcels: Parcel[]): Parcel[][] {
+  const bb = parcels.map((p) => boundsOf([p])!);
+  const parent = parcels.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const gx = 0.0048, gy = 0.0036;
+  for (let i = 0; i < parcels.length; i++)
+    for (let j = i + 1; j < parcels.length; j++) {
+      const a = bb[i], b = bb[j];
+      if (a[0] - gx <= b[2] && b[0] - gx <= a[2] && a[1] - gy <= b[3] && b[1] - gy <= a[3]) parent[find(i)] = find(j);
+    }
+  const groups = new Map<number, Parcel[]>();
+  parcels.forEach((p, i) => groups.set(find(i), [...(groups.get(find(i)) ?? []), p]));
+  return [...groups.values()].sort((a, b) => b.reduce((s, p) => s + p.areaHa, 0) - a.reduce((s, p) => s + p.areaHa, 0));
+}
 
 export default function TerrenoPage() {
   return (
@@ -44,11 +57,10 @@ function Terreno() {
   const hyd = useHydrated();
   const params = useSearchParams();
   const { parcels } = useStore();
-  const [focus, setFocus] = useState<string>("");
+  const [focus, setFocus] = useState<string>("finca:0");
   const [ex, setEx] = useState(2);
-  const [sigpac, setSigpac] = useState(false);
-  const [fit, setFit] = useState<{ bounds: [number, number, number, number]; key: number } | null>(null);
-  const [map, setMap] = useState<maplibregl.Map | null>(null);
+  const [crop, setCrop] = useState<"parcelas" | "entorno">("parcelas");
+  const api = useRef<MaquetaApi | null>(null);
 
   // Relieve
   const [ign, setIgn] = useState<{ dem: Dem | null; error: string | null; loading: boolean }>({ dem: null, error: null, loading: false });
@@ -69,9 +81,6 @@ function Terreno() {
   const [playing, setPlaying] = useState(true);
   const [mode, setMode] = useState<"lluvia" | "punto">("lluvia");
   const [point, setPoint] = useState<[number, number] | null>(null);
-  const modeRef = useRef(mode);
-  modeRef.current = mode;
-  const sim = useRef<WaterSim | null>(null);
 
   useEffect(() => {
     const pid = params.get("parcela");
@@ -87,15 +96,15 @@ function Terreno() {
     });
   }, []);
 
-  const sel = useMemo(() => parcels.filter((x) => !focus || x.id === focus), [parcels, focus]);
+  const groups = useMemo(() => fincas(parcels), [parcels]);
+  const sel = useMemo(() => {
+    if (focus.startsWith("finca:")) return groups[Number(focus.slice(6))] ?? groups[0] ?? [];
+    const one = parcels.filter((x) => x.id === focus);
+    return one.length ? one : groups[0] ?? [];
+  }, [parcels, groups, focus]);
   const selKey = sel.map((p) => p.id).join(",");
-
-  useEffect(() => {
-    if (!hyd) return;
-    const bb = boundsOf(sel);
-    if (bb) setFit({ bounds: bb, key: Date.now() });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selKey, hyd]);
+  const selPolys = useMemo(() => sel.map((p) => p.geometry), [sel]);
+  useEffect(() => setPoint(null), [selKey]);
 
   // MDT del IGN para la zona elegida
   useEffect(() => {
@@ -145,13 +154,6 @@ function Terreno() {
 
   const active = src === "cad" && cadDem ? cadDem : ign.dem;
 
-  // Teselas de relieve: plano > IGN > relieve global
-  const demTiles = useMemo(() => {
-    const list: { dem: Dem; offset: number }[] = [];
-    if (cadDem) list.push({ dem: cadDem, offset: 0 });
-    if (ign.dem) list.push({ dem: ign.dem, offset: 0 });
-    return list.length ? setDemLayers(list) : null;
-  }, [cadDem, ign.dem]);
 
   // Análisis hidrológico
   const [an, setAn] = useState<Analysis | null>(null);
@@ -185,80 +187,6 @@ function Terreno() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, selKey]);
-
-  // Capas del mapa
-  useEffect(() => {
-    if (!map) return;
-    const add = (id: string, data: GeoJSON.FeatureCollection, extra: Record<string, unknown> = {}) => {
-      const s = map.getSource(id) as GeoJSONSource | undefined;
-      if (s) s.setData(data);
-      else map.addSource(id, { type: "geojson", data, ...extra });
-    };
-    add("t-pools", an?.pools ?? EMPTY);
-    add("t-contours", an?.contours ?? EMPTY);
-    add("t-streams", an?.streams ?? EMPTY);
-    add("t-exits", exitPoints(an?.stats ?? null));
-    add("t-water-trail", EMPTY, { lineMetrics: true });
-    add("t-water-head", EMPTY);
-    add("t-source", point ? { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: point } }] } : EMPTY);
-    const layer = (spec: maplibregl.LayerSpecification) => {
-      if (!map.getLayer(spec.id)) map.addLayer(spec);
-    };
-    layer({ id: "t-pools", type: "fill", source: "t-pools", paint: { "fill-color": ["interpolate", ["linear"], ["get", "depth"], 0.05, "#5DB4EA", 0.5, "#1E5E9A"], "fill-opacity": 0.55 } });
-    layer({ id: "t-contours", type: "line", source: "t-contours", paint: { "line-color": "#FBF1D6", "line-opacity": ["case", ["get", "master"], 0.9, 0.5], "line-width": ["case", ["get", "master"], 1.5, 0.7] } });
-    layer({
-      id: "t-contour-labels", type: "symbol", source: "t-contours", filter: ["==", ["get", "master"], true],
-      layout: { "symbol-placement": "line", "symbol-spacing": 320, "text-field": ["number-format", ["get", "z"], { "max-fraction-digits": 1 }], "text-font": ["Open Sans Semibold"], "text-size": 11, "text-keep-upright": true },
-      paint: { "text-color": "#FBF1D6", "text-halo-color": "rgba(20,32,26,0.85)", "text-halo-width": 1.4 },
-    });
-    layer({ id: "t-streams", type: "line", source: "t-streams", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#62C1F0", "line-opacity": 0.7, "line-width": ["interpolate", ["linear"], ["ln", ["get", "acc"]], 4, 0.8, 11, 5] } });
-    layer({ id: "t-water-trail", type: "line", source: "t-water-trail", layout: { "line-cap": "round" }, paint: { "line-width": 1.8, "line-opacity": ["*", 0.9, ["get", "o"]], "line-gradient": ["interpolate", ["linear"], ["line-progress"], 0, "rgba(120,200,250,0)", 1, "rgba(190,232,255,0.95)"] } });
-    layer({ id: "t-water-head", type: "circle", source: "t-water-head", paint: { "circle-radius": ["case", ["==", ["get", "s"], 1], 2.2, 1.6], "circle-color": ["case", ["==", ["get", "s"], 1], "#6FBFF0", "#D6F1FF"], "circle-opacity": ["*", 0.9, ["get", "o"]], "circle-pitch-alignment": "map" } });
-    layer({ id: "t-exits", type: "circle", source: "t-exits", paint: { "circle-radius": 9, "circle-color": ["case", ["get", "pool"], "#1E5E9A", "#B4532A"], "circle-stroke-color": "#fff", "circle-stroke-width": 2, "circle-pitch-alignment": "map" } });
-    layer({ id: "t-exits-label", type: "symbol", source: "t-exits", layout: { "text-field": ["get", "label"], "text-font": ["Open Sans Semibold"], "text-size": 12, "text-offset": [0, -1.6] }, paint: { "text-color": "#fff", "text-halo-color": "rgba(20,32,26,0.9)", "text-halo-width": 1.6 } });
-    layer({ id: "t-source", type: "circle", source: "t-source", paint: { "circle-radius": 8, "circle-color": "#1E6AA0", "circle-stroke-color": "#fff", "circle-stroke-width": 3, "circle-pitch-alignment": "map" } });
-    map.setLayoutProperty("t-contours", "visibility", showContours ? "visible" : "none");
-    map.setLayoutProperty("t-contour-labels", "visibility", showContours ? "visible" : "none");
-    map.setLayoutProperty("t-streams", "visibility", showStreams ? "visible" : "none");
-    map.setLayoutProperty("t-pools", "visibility", showPools ? "visible" : "none");
-  }, [map, an, showContours, showStreams, showPools, point]);
-
-  // Clic para soltar agua en un punto
-  useEffect(() => {
-    if (!map) return;
-    const onClick = (e: maplibregl.MapMouseEvent) => {
-      if (modeRef.current === "punto") setPoint([e.lngLat.lng, e.lngLat.lat]);
-    };
-    map.on("click", onClick);
-    return () => {
-      map.off("click", onClick);
-    };
-  }, [map]);
-  useEffect(() => {
-    if (!map) return;
-    map.getCanvas().style.cursor = mode === "punto" ? "crosshair" : "";
-  }, [map, mode]);
-
-  // Simulación del agua
-  useEffect(() => {
-    sim.current?.clear();
-    sim.current = null;
-    if (!map || !an) return;
-    const reduce = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const areaHa = (an.spawn.length * an.dem.cellM[0] * an.dem.cellM[1]) / 10000;
-    const n = Math.round(Math.min(900, Math.max(160, areaHa * 500)));
-    const s = new WaterSim(map, an.dem, an.hy, an.spawn, reduce ? Math.round(n / 3) : n);
-    sim.current = s;
-    return () => s.clear();
-  }, [map, an]);
-  useEffect(() => {
-    const s = sim.current;
-    if (!s) return;
-    s.setSource(mode === "punto" ? point : null);
-    if (playing && (mode === "lluvia" || point)) s.start();
-    else if (mode === "punto" && !point) s.clear();
-    else s.stop();
-  }, [playing, mode, point, an]);
 
   // Importar plano
   async function onFile(f: File) {
@@ -305,57 +233,91 @@ function Terreno() {
   if (!hyd) return <TopBar title="Terreno 3D" />;
   if (!parcels.length) return (<><TopBar title="Terreno 3D" /><EmptyParcels what="tu terreno en 3D" /></>);
 
-  const p = parcels.find((x) => x.id === focus);
-  const b = boundsOf(parcels);
+  const p = sel.length === 1 && !focus.startsWith("finca:") ? sel[0] : null;
+  const fincaName = (g: Parcel[]) => (groups.length === 1 ? "Toda la finca" : `Finca de ${g[0].name}${g.length > 1 ? ` y ${g.length - 1} más` : ""}`);
+  const title = p ? p.name : fincaName(sel);
+  const selHa = sel.reduce((a, x) => a + x.areaHa, 0);
+  const b = boundsOf(sel);
   const st = an?.stats ?? null;
   const farFromFarm = cadDem && b ? distKm(cadDem.bounds, b) : 0;
+  const areaHa = an ? (an.spawn.length * an.dem.cellM[0] * an.dem.cellM[1]) / 10000 : 0;
+  const nParticles = Math.round(Math.min(1200, Math.max(200, areaHa * 400)));
+
+  async function download() {
+    const blob = await api.current?.snapshot();
+    if (!blob) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `tempero-${title.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col lg:block">
-      <div className="relative h-[62vh] min-h-[460px] overflow-hidden bg-noche lg:absolute lg:inset-0 lg:h-auto">
-        <FarmMap
-          parcels={parcels}
-          selectedId={focus || null}
-          showSigpac={sigpac}
-          terrain={ex}
-          demTiles={demTiles}
-          fitTo={fit}
-          onReady={setMap}
-          padding={{ top: 90, right: 420, bottom: 24, left: 24 }}
-          initialView={!focus && b ? { center: [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2], zoom: 14.5 } : null}
-        />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-noche/50 to-transparent" />
-        <div className="pointer-events-none absolute bottom-6 left-1/2 hidden -translate-x-1/2 rounded-xl bg-noche/80 px-3.5 py-2 text-[13px] text-white backdrop-blur lg:block lg:left-[calc(50%-200px)]">
-          {mode === "punto" ? (point ? "Clic en otro sitio para mover el punto de riego" : "Haz clic en el terreno donde sale el agua") : "Gira con clic derecho o Ctrl + arrastrar"}
+    <div className="relative flex min-h-0 flex-1 flex-col bg-[#f5f3ee] lg:block">
+      <div className="relative h-[62vh] min-h-[460px] lg:absolute lg:inset-0 lg:right-[410px] lg:h-auto">
+        {an && (
+          <Maqueta
+            dem={an.dem}
+            hy={an.hy}
+            spawn={an.spawn}
+            polys={selPolys}
+            crop={crop}
+            ex={ex}
+            overlays={an}
+            show={{ contours: showContours, streams: showStreams, pools: showPools }}
+            exits={st?.exits ?? []}
+            playing={playing}
+            mode={mode}
+            point={point}
+            particles={nParticles}
+            onPoint={setPoint}
+            apiRef={api}
+          />
+        )}
+        <div className="pointer-events-none absolute bottom-6 left-1/2 hidden -translate-x-1/2 rounded-xl bg-white/90 px-3.5 py-2 text-[13px] text-tinta-2 shadow-[0_2px_8px_oklch(0.2_0.02_155/0.1)] lg:block">
+          {mode === "punto" ? (point ? "Clic en otro sitio para mover el punto de riego" : "Haz clic en el terreno donde sale el agua") : "Arrastra para girar · clic derecho para desplazar · rueda para acercar"}
         </div>
-        {(ign.loading || analysing) && (
-          <div className="absolute top-24 left-6 flex items-center gap-2.5 rounded-xl bg-noche/85 px-3.5 py-2 text-[13px] text-white backdrop-blur">
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            {ign.loading ? "Descargando el LiDAR del IGN…" : "Calculando por dónde corre el agua…"}
+        {(ign.loading || analysing || !an) && !ign.error && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex items-center gap-2.5 rounded-xl bg-white px-4 py-2.5 text-[14px] text-tinta-2 shadow-[var(--shadow-float)]">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-olivo border-t-transparent" />
+              {ign.loading ? "Descargando el LiDAR del IGN de tu finca…" : "Montando la maqueta y calculando el agua…"}
+            </div>
           </div>
         )}
       </div>
 
       <div className="lg:pointer-events-none lg:absolute lg:inset-x-0 lg:top-0 lg:[&>*]:pointer-events-auto">
         <TopBar title="Terreno 3D">
-          <select className="input h-10 w-auto font-semibold" value={focus} onChange={(e) => setFocus(e.target.value)} aria-label="Parcela">
-            <option value="">Toda la finca</option>
-            {parcels.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          <select className="input h-10 w-auto max-w-[300px] font-semibold" value={focus} onChange={(e) => setFocus(e.target.value)} aria-label="Finca o parcela">
+            <optgroup label={groups.length === 1 ? "Finca" : "Fincas"}>
+              {groups.map((g, i) => <option key={i} value={`finca:${i}`}>{fincaName(g)} · {ha(g.reduce((a, x) => a + x.areaHa, 0))}</option>)}
+            </optgroup>
+            <optgroup label="Parcelas">
+              {parcels.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </optgroup>
           </select>
-          <button className={`btn btn-sm ${sigpac ? "btn-primary" : "btn-ghost"}`} aria-pressed={sigpac} onClick={() => setSigpac(!sigpac)}>Recintos SIGPAC</button>
+          <div role="radiogroup" aria-label="Recorte" className="flex rounded-xl bg-rastrojo p-1">
+            {([["parcelas", "Solo mis parcelas"], ["entorno", "Con el entorno"]] as const).map(([id, label]) => (
+              <button key={id} role="radio" aria-checked={crop === id} onClick={() => setCrop(id)}
+                className={`h-8 rounded-lg px-3 text-[13.5px] font-semibold transition-colors ${crop === id ? "bg-white text-tinta shadow-[0_1px_3px_oklch(0.2_0.02_155/0.15)]" : "text-tinta-2 hover:text-tinta"}`}>{label}</button>
+            ))}
+          </div>
           <div className="flex-1" />
-          <label className="flex items-center gap-2.5 pr-2 text-sm font-semibold text-tinta-2">Relieve
-            <input type="range" min={1} max={5} step={0.5} value={ex} onChange={(e) => setEx(Number(e.target.value))} className="w-32 accent-olivo" aria-label="Exagerar relieve" />
+          <label className="flex items-center gap-2.5 pr-1 text-sm font-semibold text-tinta-2">Relieve
+            <input type="range" min={1} max={6} step={0.5} value={ex} onChange={(e) => setEx(Number(e.target.value))} className="w-28 accent-olivo" aria-label="Exagerar relieve" />
             <span className="num w-8">×{ex}</span>
           </label>
+          <button className="btn btn-ghost btn-sm" onClick={download} disabled={!an}>Descargar imagen</button>
         </TopBar>
       </div>
 
       <section aria-label="Datos del terreno" className="flex animate-rise flex-col gap-4 bg-white p-5 lg:absolute lg:top-[84px] lg:right-4 lg:bottom-4 lg:w-[390px] lg:overflow-y-auto lg:rounded-[22px] lg:border lg:border-linea/80 lg:shadow-[var(--shadow-float)]">
         <div>
-          <span className="kpi-label">{p ? "Parcela" : "Toda la finca"}</span>
-          <h2 className="font-display text-[26px] leading-tight font-semibold">{p ? p.name : `${parcels.length} parcela${parcels.length === 1 ? "" : "s"}`}</h2>
-          {p && <span className="text-sm text-tinta-3">{cropById(p.cropId).name} · {ha(p.areaHa)}</span>}
+          <span className="kpi-label">{p ? "Parcela" : "Finca"}</span>
+          <h2 className="font-display text-[26px] leading-tight font-semibold">{title}</h2>
+          <span className="text-sm text-tinta-3">{p ? `${cropById(p.cropId).name} · ${ha(p.areaHa)}` : `${sel.length} parcela${sel.length === 1 ? "" : "s"} · ${ha(selHa)}`}</span>
         </div>
 
         {/* Fuente del relieve */}
@@ -428,7 +390,7 @@ function Terreno() {
                 className={`h-8 flex-1 rounded-lg text-[13px] font-semibold ${mode === id ? "bg-white text-tinta shadow-[0_1px_3px_oklch(0.2_0.02_155/0.15)]" : "text-tinta-2"}`}>{label}</button>
             ))}
           </div>
-          <span className="text-xs text-tinta-3">{mode === "lluvia" ? "Llueve sobre " + (p ? "la parcela" : "tus parcelas") : point ? "El agua sale del punto marcado" : "Marca en el mapa la boca de riego, hidrante o cabecera"} · 1 s de animación = {TIME_SCALE / 60} min</span>
+          <span className="text-xs text-tinta-3">{mode === "lluvia" ? "Llueve sobre " + (p ? "la parcela" : "las parcelas de la finca") : point ? "El agua sale del punto marcado" : "Marca en el mapa la boca de riego, hidrante o cabecera"} · 1 s de animación = {TIME_SCALE / 60} min</span>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-[13px]">
             <Toggle on={showContours} set={setShowContours} label={`Curvas de nivel${an ? ` (${nf(an.step, an.step < 1 ? 2 : 0)} m)` : ""}`} />
             <Toggle on={showStreams} set={setShowStreams} label="Escorrentía" />
@@ -467,7 +429,7 @@ function Terreno() {
           </>
         )}
         <p className="text-xs leading-relaxed text-tinta-3">
-          {an ? an.dem.source : "Relieve"}. Escorrentía por la dirección de máxima pendiente (D8) tras rellenar los hoyos del terreno (Priority-Flood). Fuera de la zona analizada, relieve global Terrain Tiles. Ortofoto PNOA © IGN.
+          {an ? an.dem.source : "Relieve"}. Escorrentía por la dirección de máxima pendiente (D8) tras rellenar los hoyos del terreno (Priority-Flood). Ortofoto PNOA © IGN.
         </p>
       </section>
     </div>

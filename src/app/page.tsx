@@ -136,15 +136,16 @@ export default function Home() {
       </section>
 
       {/* Terreno 3D */}
-      <section id="terreno" className="relative scroll-mt-24 overflow-hidden">
-        <Image src="/shots/terreno.webp" alt="" fill sizes="100vw" className="object-cover" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,oklch(0.2_0.02_155/0.92)_0%,oklch(0.2_0.02_155/0.7)_40%,oklch(0.2_0.02_155/0.05)_75%)]" />
-        <div className="relative mx-auto flex min-h-[620px] max-w-[1280px] flex-col justify-center gap-6 px-5 py-24 text-white sm:px-8">
-          <Reveal className="flex max-w-xl flex-col gap-5">
-            <span className="text-[13px] font-bold tracking-[0.08em] text-olivo-vivo">TERRENO 3D</span>
-            <h2 className="font-display text-[clamp(34px,4vw,56px)] leading-[1.02] font-semibold tracking-[-0.02em]">Mira por dónde se va el agua de tu finca.</h2>
-            <p className="text-[17px] leading-relaxed text-[oklch(0.86_0.012_150)]">Relieve LiDAR del IGN a 5 m o tu plano de AutoCAD (DXF o LandXML), con curvas de nivel y el agua animada bajando por la pendiente. Te dice por dónde sale, cuánta superficie drena a cada punto y dónde se encharca.</p>
-            <Link href="/app/terreno" className="btn mt-2 self-start bg-white text-olivo-oscuro shadow-[0_2px_0_oklch(0.8_0.02_150)] hover:bg-olivo-claro">Ver mi terreno en 3D</Link>
+      <section id="terreno" className="relative scroll-mt-24 overflow-hidden bg-[radial-gradient(ellipse_at_70%_45%,#ffffff_0%,#f3f1ec_55%,#e9e5dc_100%)]">
+        <div className="mx-auto grid max-w-[1280px] items-center gap-10 px-5 py-24 sm:px-8 lg:grid-cols-[minmax(0,4fr)_minmax(0,7fr)] lg:py-28">
+          <Reveal className="flex flex-col gap-5">
+            <span className="text-[13px] font-bold tracking-[0.08em] text-olivo">TERRENO 3D</span>
+            <h2 className="font-display text-[clamp(34px,4vw,56px)] leading-[1.02] font-semibold tracking-[-0.02em]">Tu finca en maqueta. Y por dónde se va el agua.</h2>
+            <p className="text-[17px] leading-relaxed text-tinta-2">Solo tu terreno, recortado y en relieve con el LiDAR del IGN o tu plano de AutoCAD (DXF o LandXML). Curvas de nivel, el agua animada bajando por la pendiente, por dónde sale y dónde se encharca. Y la imagen lista para tu presentación.</p>
+            <Link href="/app/terreno" className="btn btn-primary mt-2 self-start">Ver mi finca en 3D</Link>
+          </Reveal>
+          <Reveal delay={120}>
+            <Image src="/shots/terreno.webp" alt="Maqueta 3D de una finca con la ortofoto, curvas de nivel y la escorrentía" width={1600} height={1000} sizes="(min-width: 1024px) 60vw, 100vw" className="h-auto w-full" />
           </Reveal>
         </div>
       </section>

@@ -14,6 +14,7 @@
     "@turf/centroid": "^7.4.0",
     "@turf/helpers": "^7.4.0",
     "@turf/union": "^7.4.0",
+    "@types/three": "^0.170.0",
     "d3-contour": "^4.0.3",
     "delaunator": "^5.1.0",
     "dxf-parser": "^1.1.2",
@@ -23,6 +24,7 @@
     "proj4": "^2.23.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "three": "^0.170.0",
     "write-excel-file": "^2.3.10",
     "zustand": "^5.1.0"
   },
