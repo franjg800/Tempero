@@ -63,7 +63,7 @@ export default function AbonadoPage() {
       </TopBar>
       {msg && <div className="px-6 pt-4"><Notice tone="mute">{msg} <Link href="/app/cuaderno?seccion=fertilizacion" className="font-semibold underline">Ver en el cuaderno</Link></Notice></div>}
 
-      <div className="flex flex-wrap items-start gap-5 p-6">
+      <div className="enter flex flex-wrap items-start gap-5 px-4 pt-2 pb-6 sm:px-6">
         <section className="card min-w-0 flex-[999_1_600px] overflow-x-auto px-5 pt-1.5 pb-3">
           <div className="min-w-[760px]">
             <div className="grid grid-cols-[1.6fr_.8fr_.9fr_.6fr_.6fr_.6fr_1fr] gap-2.5 border-b border-linea py-3.5 text-xs font-bold text-tinta-3">

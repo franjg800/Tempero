@@ -83,7 +83,7 @@ function Cuaderno() {
       </TopBar>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
+        <div className="enter flex min-w-0 flex-1 flex-col gap-4 px-4 pt-2 pb-6 sm:px-6">
           <nav aria-label="Secciones del cuaderno" className="flex flex-wrap gap-1.5">
             {SECTIONS.map((s) => (
               <button key={s.type} onClick={() => setTab(s.type)} aria-current={tab === s.type ? "true" : undefined}
@@ -173,7 +173,7 @@ function EntryForm({ draft, setDraft, onSave, onDelete, onTemplate, hasTemplate 
   const nApplied = draft.type === "fertilizacion" && draft.data.n && draft.data.dosis ? (Number(draft.data.n) * Number(draft.data.dosis)) / 100 : null;
 
   return (
-    <section aria-label="Anotación" className="flex w-full flex-col gap-4 overflow-y-auto border-l border-linea bg-white p-5 lg:w-[440px] lg:flex-none">
+    <section aria-label="Anotación" className="m-4 flex animate-rise flex-col gap-4 overflow-y-auto rounded-[22px] border border-linea/80 bg-white p-5 shadow-[var(--shadow-float)] lg:mt-2 lg:ml-0 lg:w-[440px] lg:flex-none">
       <div className="flex items-center justify-between">
         <h2 className="h2">{draft.id ? "Editar" : "Anotar"} · {sec.short.toLowerCase()}</h2>
         <button className="btn btn-sm btn-ghost" aria-label="Cerrar" onClick={() => setDraft(null)}><Icon name="x" size={18} /></button>

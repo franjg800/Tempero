@@ -31,7 +31,7 @@ export default function PrintNotebook() {
         <tbody>
           {parcels.map((p) => (
             <tr key={p.id} className="border-b border-linea">
-              <td className="py-1 pr-2 font-semibold">{p.name}</td><td className="num py-1 pr-2">{sigpacCode(p.sigpac)}</td><td className="py-1 pr-2">{p.usoSigpac ?? ""}</td>
+              <td className="py-1 pr-2 font-semibold">{p.name}</td><td className="code py-1 pr-2">{sigpacCode(p.sigpac)}</td><td className="py-1 pr-2">{p.usoSigpac ?? ""}</td>
               <td className="num py-1 pr-2">{nf(p.areaHa, 2)}</td><td className="py-1 pr-2">{cropById(p.cropId).name}</td><td className="py-1 pr-2">{p.variety}</td><td className="py-1 pr-2">{p.irrigation.system === "secano" ? "No" : "Sí"}</td>
             </tr>
           ))}

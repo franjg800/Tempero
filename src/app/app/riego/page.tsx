@@ -77,7 +77,7 @@ function ParcelWater({ parcel, assume, setAssume, range }: { parcel: Parcel; ass
   }
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="enter flex flex-col gap-5 px-4 pt-2 pb-6 sm:px-6">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
         <Kpi label="Lluvia · 7 días" value={nf(rain7, 1)} unit="mm" tone="water" sub={`Datos ${w.data.source} para la parcela`} />
         <Kpi label="Consumo del cultivo · 7 días" value={nf(etc7, 1)} unit="mm" sub={`ETo ${nf(today.et0, 1)} mm/d × Kc ${nf(today.kc, 2)}`} />
@@ -155,7 +155,7 @@ function Row({ k, v }: { k: string; v: string }) {
 
 function IrrigatedTable({ parcels, assume, onPick }: { parcels: Parcel[]; assume: boolean; onPick: (id: string) => void }) {
   return (
-    <section className="card mx-6 mb-6 overflow-x-auto px-5 py-2">
+    <section className="card mx-4 mb-6 animate-rise overflow-x-auto px-5 py-2 sm:mx-6">
       <div className="min-w-[640px]">
         <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] gap-3 border-b border-linea py-3 text-xs font-bold text-tinta-3">
           <span>PARCELAS DE REGADÍO</span><span>AGUA ÚTIL</span><span>PRÓXIMO RIEGO</span><span>DOSIS</span><span>ESTADO</span>

@@ -1,72 +1,174 @@
 @import "tailwindcss";
 
+/* Tempero · sistema de diseño
+   Colores en OKLCH, neutros teñidos hacia el verde de la marca, sin blanco ni negro puros.
+   Un solo acento de acción (olivo); azul solo para agua, barro solo para suelo y abono. */
 @theme {
-  --color-olivo: #2e5b3b;
-  --color-olivo-oscuro: #1e3f28;
-  --color-olivo-claro: #e3ece2;
-  --color-acequia: #1e6aa0;
-  --color-acequia-oscuro: #154e78;
-  --color-acequia-claro: #e2eef7;
-  --color-barro: #a85a24;
-  --color-barro-oscuro: #7a3f15;
-  --color-barro-claro: #f5e8dc;
-  --color-trigo: #d9a21b;
-  --color-trigo-oscuro: #6b4e06;
-  --color-trigo-claro: #fbf0d2;
-  --color-rojo: #8a2a1c;
-  --color-rojo-claro: #f6dede;
-  --color-noche: #14201a;
-  --color-noche-2: #1f2f26;
-  --color-noche-3: #2e4236;
-  --color-tinta: #17241c;
-  --color-tinta-2: #46554b;
-  --color-tinta-3: #5e6a62;
-  --color-rastrojo: #f3f2ec;
-  --color-linea: #dcdad0;
-  --color-linea-2: #eceae2;
-  --font-sans: var(--font-inter), system-ui, sans-serif;
-  --font-display: var(--font-archivo), system-ui, sans-serif;
+  --color-white: oklch(0.993 0.004 100);
+  --color-black: oklch(0.2 0.02 155);
+
+  --color-olivo: oklch(0.43 0.075 150);
+  --color-olivo-oscuro: oklch(0.34 0.06 150);
+  --color-olivo-claro: oklch(0.93 0.022 145);
+  --color-olivo-vivo: oklch(0.72 0.09 150);
+  --color-acequia: oklch(0.51 0.12 245);
+  --color-acequia-oscuro: oklch(0.42 0.1 245);
+  --color-acequia-claro: oklch(0.94 0.022 240);
+  --color-barro: oklch(0.55 0.13 50);
+  --color-barro-oscuro: oklch(0.43 0.1 50);
+  --color-barro-claro: oklch(0.94 0.025 60);
+  --color-trigo: oklch(0.75 0.15 80);
+  --color-trigo-oscuro: oklch(0.45 0.09 80);
+  --color-trigo-claro: oklch(0.96 0.04 90);
+  --color-rojo: oklch(0.45 0.14 30);
+  --color-rojo-claro: oklch(0.94 0.03 25);
+  --color-noche: oklch(0.22 0.022 155);
+  --color-noche-2: oklch(0.27 0.025 155);
+  --color-noche-3: oklch(0.34 0.03 155);
+  --color-tinta: oklch(0.24 0.025 155);
+  --color-tinta-2: oklch(0.42 0.025 155);
+  --color-tinta-3: oklch(0.5 0.02 155);
+  --color-rastrojo: oklch(0.965 0.008 100);
+  --color-linea: oklch(0.88 0.012 100);
+  --color-linea-2: oklch(0.93 0.01 100);
+
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --shadow-dock: 0 1px 0 oklch(0.2 0.02 155 / 0.04), 0 10px 30px -12px oklch(0.2 0.02 155 / 0.28);
+  --shadow-float: 0 18px 48px -18px oklch(0.2 0.02 155 / 0.42);
+
+  --animate-rise: rise 0.7s var(--ease-out-expo) both;
+  --animate-fade: fade 0.6s var(--ease-out-quart) both;
 }
 
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: var(--len, 1200);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes unveil {
+  from {
+    clip-path: inset(10% 12% 10% 12% round 28px);
+    opacity: 0.4;
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 22px);
+    opacity: 1;
+  }
+}
+@keyframes drift {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
 html,
 body {
   background: var(--color-rastrojo);
   color: var(--color-tinta);
 }
-
 body {
   font-family: var(--font-sans);
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+::selection {
+  background: var(--color-olivo-claro);
+  color: var(--color-olivo-oscuro);
+}
+:focus-visible {
+  outline: 2px solid var(--color-olivo);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 @layer components {
+  /* Botones con pulsación física: borde inferior que se hunde al pulsar */
   .btn {
-    @apply inline-flex h-11 items-center justify-center gap-2 rounded-[10px] px-4 text-[15px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    @apply relative inline-flex h-11 items-center justify-center gap-2 rounded-[11px] px-4 text-[15px] font-semibold whitespace-nowrap select-none disabled:cursor-not-allowed disabled:opacity-50;
+    transition:
+      transform 120ms var(--ease-out-quart),
+      box-shadow 120ms var(--ease-out-quart),
+      background-color 200ms var(--ease-out-quart),
+      color 200ms var(--ease-out-quart);
+  }
+  .btn:active:not(:disabled) {
+    transform: translateY(2px);
   }
   .btn-sm {
-    @apply h-9 px-3 text-sm;
+    @apply h-9 rounded-[10px] px-3 text-sm;
   }
   .btn-primary {
     @apply bg-olivo text-white hover:bg-olivo-oscuro;
+    box-shadow:
+      0 2px 0 var(--color-olivo-oscuro),
+      inset 0 1px 0 oklch(1 0 0 / 0.14);
+  }
+  .btn-primary:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-olivo-oscuro);
   }
   .btn-water {
     @apply bg-acequia text-white hover:bg-acequia-oscuro;
+    box-shadow: 0 2px 0 var(--color-acequia-oscuro);
+  }
+  .btn-water:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-acequia-oscuro);
   }
   .btn-earth {
     @apply bg-barro text-white hover:bg-barro-oscuro;
+    box-shadow: 0 2px 0 var(--color-barro-oscuro);
   }
   .btn-outline {
     @apply border-[1.5px] border-olivo bg-white text-olivo hover:bg-olivo-claro;
+    box-shadow: 0 2px 0 var(--color-olivo-claro);
+  }
+  .btn-outline:active:not(:disabled) {
+    box-shadow: none;
   }
   .btn-ghost {
-    @apply bg-transparent text-tinta-2 hover:bg-linea-2;
+    @apply bg-transparent text-tinta-2 hover:bg-linea-2 hover:text-tinta;
   }
   .btn-danger {
     @apply border-[1.5px] border-rojo bg-white text-rojo hover:bg-rojo-claro;
   }
   .card {
-    @apply rounded-2xl border border-linea bg-white;
+    @apply rounded-[18px] border border-linea bg-white;
+    box-shadow: 0 1px 2px oklch(0.2 0.02 155 / 0.04);
+  }
+  .dock {
+    @apply border border-linea/80 bg-white/85 backdrop-blur-md;
+    box-shadow: var(--shadow-dock);
   }
   .chip {
     @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap;
@@ -93,27 +195,92 @@ body {
     @apply flex flex-col gap-1.5 text-[13px] font-semibold text-tinta-2;
   }
   .input {
-    @apply h-11 w-full rounded-[10px] border border-linea bg-white px-3 text-[15px] font-medium text-tinta outline-none focus:border-olivo focus:ring-2 focus:ring-olivo/15;
+    @apply h-11 w-full rounded-[11px] border border-linea bg-white px-3 text-[15px] font-medium text-tinta outline-none;
+    transition:
+      border-color 150ms,
+      box-shadow 150ms;
+  }
+  .input:focus {
+    @apply border-olivo;
+    box-shadow: 0 0 0 3px oklch(0.43 0.075 150 / 0.14);
   }
   textarea.input {
     @apply h-auto min-h-20 py-2;
   }
   .kpi-label {
-    @apply text-xs font-bold tracking-wide text-tinta-3 uppercase;
+    @apply text-[11px] font-bold tracking-[0.06em] text-tinta-3 uppercase;
   }
+  /* Cifras con anchura fija para que cuadren en tablas, sin recurrir a la monoespaciada */
   .num {
-    @apply font-mono;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .code {
+    @apply font-mono text-[0.92em];
   }
   .h1 {
-    @apply font-display text-[22px] font-bold;
+    @apply font-display text-[24px] font-semibold tracking-[-0.01em];
   }
   .h2 {
-    @apply font-display text-xl font-bold;
+    @apply font-display text-[21px] font-semibold tracking-[-0.01em];
+  }
+  /* Entrada escalonada de bloques al cargar cada pantalla */
+  .enter > * {
+    animation: var(--animate-rise);
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+  .enter > *:nth-child(1) {
+    --i: 0;
+  }
+  .enter > *:nth-child(2) {
+    --i: 1;
+  }
+  .enter > *:nth-child(3) {
+    --i: 2;
+  }
+  .enter > *:nth-child(4) {
+    --i: 3;
+  }
+  .enter > *:nth-child(n + 5) {
+    --i: 4;
+  }
+  .reveal {
+    opacity: 0;
+    transform: translateY(22px);
+    transition:
+      opacity 0.8s var(--ease-out-expo),
+      transform 0.8s var(--ease-out-expo);
+    transition-delay: var(--d, 0ms);
+  }
+  .reveal[data-in="true"] {
+    opacity: 1;
+    transform: none;
   }
 }
 
 .maplibregl-ctrl-attrib {
   font-size: 11px;
+}
+.maplibregl-ctrl-group {
+  border-radius: 12px !important;
+  box-shadow: var(--shadow-dock) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @media print {

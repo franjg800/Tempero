@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TopBar } from "@/components/Sidebar";
 import { Icon } from "@/components/Icon";
 import { Notice } from "@/components/ui";
@@ -21,6 +21,18 @@ const FarmMap = dynamic(() => import("@/components/FarmMap"), { ssr: false, load
 
 type Place = { display_name: string; lat: string; lon: string; type: string };
 
+function useWide() {
+  const [w, setW] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia("(min-width: 1024px)");
+    const on = () => setW(m.matches);
+    on();
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return w;
+}
+
 export default function MapaPage() {
   const hyd = useHydrated();
   const { parcels, selectedId, select, addParcel, removeParcel, mapView, setMapView, entries } = useStore();
@@ -37,6 +49,7 @@ export default function MapaPage() {
   const [newName, setNewName] = useState("");
   const [newCrop, setNewCrop] = useState("trigo");
   const selected = parcels.find((p) => p.id === selectedId) ?? null;
+  const wide = useWide();
   const total = parcels.reduce((s, p) => s + p.areaHa, 0);
 
   const already = useMemo(() => {
@@ -101,105 +114,110 @@ export default function MapaPage() {
     }
   };
 
+  const pad = wide ? { top: 96, right: 440, bottom: 24, left: 24 } : { top: 24, right: 24, bottom: 24, left: 24 };
+
   return (
-    <>
-      <TopBar title="Mapa de la explotación">
-        <form onSubmit={search} className="relative flex min-w-0 flex-1 items-center gap-2 sm:max-w-md">
-          <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-[10px] border border-linea px-3">
-            <Icon name="search" size={18} className="text-tinta-3" />
-            <input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Buscar municipio o lugar" value={q} onChange={(e) => setQ(e.target.value)} />
-          </label>
-          {places.length > 1 && (
-            <ul className="absolute top-11 left-0 z-20 w-full overflow-hidden rounded-xl border border-linea bg-white shadow-lg">
-              {places.map((pl, i) => (
-                <li key={i}><button type="button" className="w-full px-3 py-2 text-left text-sm hover:bg-rastrojo" onClick={() => goPlace(pl)}>{pl.display_name}</button></li>
-              ))}
-            </ul>
-          )}
-        </form>
-        <button className="btn btn-sm btn-ghost" onClick={locate}><Icon name="locate" size={18} />Mi ubicación</button>
-        <div className="flex-1" />
-        {parcels.length > 0 && <button className="btn btn-sm btn-ghost" onClick={() => setFitKey(Date.now())}>Ver toda la finca</button>}
-        <button className={`btn btn-sm ${drawing ? "btn-outline" : "btn-primary"}`} onClick={() => { setDrawing(!drawing); setPts([]); setPick(null); select(null); }}>
-          <Icon name={drawing ? "x" : "pencil"} size={18} />{drawing ? "Cancelar dibujo" : "Dibujar parcela"}
-        </button>
-      </TopBar>
-
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="relative min-h-[460px] flex-1 overflow-hidden bg-[#6E8F4E]">
-          {hyd && (
-            <FarmMap
-              parcels={parcels}
-              selectedId={selectedId}
-              base={base}
-              showSigpac={showSigpac}
-              drawing={drawing}
-              drawPoints={pts}
-              pick={pick}
-              fitKey={fitKey}
-              flyTo={fly}
-              initialView={mapView}
-              onSelect={(id) => select(id)}
-              onPickSigpac={onPick}
-              onDrawPoint={(pt) => setPts((x) => [...x, pt])}
-              onDrawFinish={finishDraw}
-              onViewChange={setMapView}
-              onZoomChange={setZoom}
-            />
-          )}
-          <div className="absolute top-3 left-3 flex flex-wrap gap-1 rounded-xl bg-white p-1.5 shadow-lg">
-            <button className={`btn btn-sm ${base === "pnoa" ? "btn-primary" : "btn-ghost"}`} onClick={() => setBase("pnoa")}>Ortofoto</button>
-            <button className={`btn btn-sm ${base === "ign" ? "btn-primary" : "btn-ghost"}`} onClick={() => setBase("ign")}>Mapa</button>
-            <button className={`btn btn-sm ${showSigpac ? "btn-primary" : "btn-ghost"}`} onClick={() => setShowSigpac(!showSigpac)}>SIGPAC</button>
-          </div>
-          {!drawing && showSigpac && zoom < 13 && (
-            <div className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 rounded-xl bg-noche/85 px-4 py-2.5 text-center text-sm font-medium text-white">
-              Acércate más para ver los recintos SIGPAC y elegirlos con un clic
-            </div>
-          )}
-          {drawing && (
-            <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-noche/90 px-4 py-2.5 text-sm text-white">
-              <span>{pts.length < 3 ? "Haz clic en las esquinas de la parcela" : "Doble clic o «Terminar» para cerrar"} · {pts.length} puntos</span>
-              {pts.length > 0 && <button className="btn btn-sm bg-white/15 text-white" onClick={() => setPts((x) => x.slice(0, -1))}>Deshacer</button>}
-            </div>
-          )}
+    <div className="relative flex min-h-0 flex-1 flex-col lg:block">
+      <div className="relative h-[62vh] min-h-[420px] overflow-hidden bg-[#5f7448] lg:absolute lg:inset-0 lg:h-auto">
+        {hyd && (
+          <FarmMap
+            parcels={parcels}
+            selectedId={selectedId}
+            base={base}
+            showSigpac={showSigpac}
+            drawing={drawing}
+            drawPoints={pts}
+            pick={pick}
+            fitKey={fitKey}
+            flyTo={fly}
+            initialView={mapView}
+            padding={pad}
+            onSelect={(id) => select(id)}
+            onPickSigpac={onPick}
+            onDrawPoint={(pt) => setPts((x) => [...x, pt])}
+            onDrawFinish={finishDraw}
+            onViewChange={setMapView}
+            onZoomChange={setZoom}
+          />
+        )}
+        <div className="dock absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1 rounded-2xl p-1.5 lg:top-[88px] lg:bottom-auto lg:left-4 lg:translate-x-0">
+          <button className={`btn btn-sm ${base === "pnoa" ? "btn-primary" : "btn-ghost"}`} aria-pressed={base === "pnoa"} onClick={() => setBase("pnoa")}>Ortofoto</button>
+          <button className={`btn btn-sm ${base === "ign" ? "btn-primary" : "btn-ghost"}`} aria-pressed={base === "ign"} onClick={() => setBase("ign")}>Mapa</button>
+          <span className="mx-0.5 w-px self-stretch bg-linea" />
+          <button className={`btn btn-sm ${showSigpac ? "btn-primary" : "btn-ghost"}`} aria-pressed={showSigpac} onClick={() => setShowSigpac(!showSigpac)}>SIGPAC</button>
         </div>
+        {!drawing && showSigpac && zoom < 13 && (
+          <div className="pointer-events-none absolute bottom-20 left-1/2 -translate-x-1/2 animate-rise rounded-2xl bg-noche/85 px-4 py-2.5 text-center text-sm font-medium text-white backdrop-blur lg:bottom-8 lg:left-[calc(50%-210px)]">
+            Acércate más para ver los recintos SIGPAC y elegirlos con un clic
+          </div>
+        )}
+        {drawing && (
+          <div className="absolute bottom-20 left-1/2 flex -translate-x-1/2 animate-rise items-center gap-3 rounded-2xl bg-noche/90 px-4 py-2.5 text-sm text-white backdrop-blur lg:bottom-8 lg:left-[calc(50%-210px)]">
+            <span>{pts.length < 3 ? "Haz clic en las esquinas de la parcela" : "Doble clic o «Terminar» para cerrar"} · {pts.length} puntos</span>
+            {pts.length > 0 && <button className="btn btn-sm bg-white/15 text-white" onClick={() => setPts((x) => x.slice(0, -1))}>Deshacer</button>}
+          </div>
+        )}
+      </div>
 
-        <section className="flex w-full flex-col gap-5 overflow-y-auto border-l border-linea bg-white p-5 lg:w-[400px] lg:flex-none">
-          {drawing ? (
-            <DrawPanel pts={pts} name={newName} setName={setNewName} crop={newCrop} setCrop={setNewCrop} onFinish={finishDraw} />
-          ) : pick ? (
-            <PickPanel pick={pick} already={already} name={newName} setName={setNewName} crop={newCrop} setCrop={setNewCrop} onAdd={addPick} onCancel={() => setPick(null)} onOpen={(id) => { setPick(null); select(id); }} />
-          ) : selected ? (
-            <SelectedPanel parcel={selected} entriesCount={entries.filter((e) => e.parcelIds.includes(selected.id)).length} onClose={() => select(null)} onDelete={() => { if (confirm(`¿Quitar «${selected.name}» de la explotación? Se borran también sus anotaciones del cuaderno.`)) removeParcel(selected.id); }} />
-          ) : (
-            <div className="flex flex-col gap-4">
-              <div>
-                <span className="kpi-label">Tu explotación</span>
-                <h2 className="font-display text-[26px] font-bold">{hyd ? `${parcels.length} parcela${parcels.length === 1 ? "" : "s"} · ${nf(total, 2)} ha` : "…"}</h2>
-              </div>
-              {hyd && parcels.length === 0 && (
-                <Notice tone="water">
-                  <b>Cómo empezar:</b> busca tu municipio arriba, acércate hasta ver las líneas amarillas de los recintos SIGPAC y haz clic en los tuyos. Si una parcela no coincide con un recinto, dibújala.
-                </Notice>
-              )}
-              <ul className="flex flex-col">
-                {parcels.map((p) => (
-                  <li key={p.id}>
-                    <button className="flex w-full items-center gap-3 border-b border-linea-2 py-3 text-left hover:bg-rastrojo" onClick={() => select(p.id)}>
-                      <span className="h-3.5 w-3.5 flex-none rounded" style={{ background: cropById(p.cropId).color }} />
-                      <span className="min-w-0 flex-1"><b className="block truncate">{p.name}</b><span className="text-xs text-tinta-3">{cropById(p.cropId).name} · {p.irrigation.system === "secano" ? "secano" : "regadío"}</span></span>
-                      <span className="num text-sm">{ha(p.areaHa)}</span>
-                    </button>
-                  </li>
+      <div className="lg:pointer-events-none lg:absolute lg:inset-x-0 lg:top-0 lg:[&>*]:pointer-events-auto">
+        <TopBar title="Mapa de la explotación">
+          <form onSubmit={search} className="relative flex min-w-0 flex-1 items-center gap-2 sm:max-w-sm">
+            <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-linea bg-white px-3 transition-shadow focus-within:border-olivo focus-within:shadow-[0_0_0_3px_oklch(0.43_0.075_150/0.14)]">
+              <Icon name="search" size={18} className="text-tinta-3" />
+              <input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Buscar municipio o lugar" aria-label="Buscar municipio o lugar" value={q} onChange={(e) => setQ(e.target.value)} />
+            </label>
+            {places.length > 1 && (
+              <ul className="dock absolute top-12 left-0 z-20 w-full animate-rise overflow-hidden rounded-2xl">
+                {places.map((pl, i) => (
+                  <li key={i}><button type="button" className="w-full px-3 py-2.5 text-left text-sm hover:bg-rastrojo" onClick={() => goPlace(pl)}>{pl.display_name}</button></li>
                 ))}
               </ul>
-              <p className="text-xs leading-relaxed text-tinta-3">Los datos se guardan en este navegador. Haz copias desde Ajustes.</p>
-            </div>
-          )}
-        </section>
+            )}
+          </form>
+          <button className="btn btn-sm btn-ghost" onClick={locate}><Icon name="locate" size={18} />Mi ubicación</button>
+          <div className="flex-1" />
+          {parcels.length > 0 && <button className="btn btn-sm btn-ghost" onClick={() => setFitKey(Date.now())}>Ver toda la finca</button>}
+          <button className={`btn btn-sm ${drawing ? "btn-outline" : "btn-primary"}`} onClick={() => { setDrawing(!drawing); setPts([]); setPick(null); select(null); }}>
+            <Icon name={drawing ? "x" : "pencil"} size={18} />{drawing ? "Cancelar dibujo" : "Dibujar parcela"}
+          </button>
+        </TopBar>
       </div>
-    </>
+
+      <section aria-label="Panel de la parcela" key={drawing ? "d" : pick ? "p" : selected?.id ?? "l"}
+        className="flex animate-rise flex-col gap-5 bg-white p-5 lg:absolute lg:top-[84px] lg:right-4 lg:bottom-4 lg:w-[400px] lg:overflow-y-auto lg:rounded-[22px] lg:border lg:border-linea/80 lg:shadow-[var(--shadow-float)]">
+        {drawing ? (
+          <DrawPanel pts={pts} name={newName} setName={setNewName} crop={newCrop} setCrop={setNewCrop} onFinish={finishDraw} />
+        ) : pick ? (
+          <PickPanel pick={pick} already={already} name={newName} setName={setNewName} crop={newCrop} setCrop={setNewCrop} onAdd={addPick} onCancel={() => setPick(null)} onOpen={(id) => { setPick(null); select(id); }} />
+        ) : selected ? (
+          <SelectedPanel parcel={selected} entriesCount={entries.filter((e) => e.parcelIds.includes(selected.id)).length} onClose={() => select(null)} onDelete={() => { if (confirm(`¿Quitar «${selected.name}» de la explotación? Se borran también sus anotaciones del cuaderno.`)) removeParcel(selected.id); }} />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div>
+              <span className="kpi-label">Tu explotación</span>
+              <h2 className="font-display text-[26px] font-bold">{hyd ? `${parcels.length} parcela${parcels.length === 1 ? "" : "s"} · ${nf(total, 2)} ha` : "…"}</h2>
+            </div>
+            {hyd && parcels.length === 0 && (
+              <Notice tone="water">
+                <b>Cómo empezar:</b> busca tu municipio arriba, acércate hasta ver las líneas amarillas de los recintos SIGPAC y haz clic en los tuyos. Si una parcela no coincide con un recinto, dibújala.
+              </Notice>
+            )}
+            <ul className="flex flex-col">
+              {parcels.map((p) => (
+                <li key={p.id}>
+                  <button className="flex w-full items-center gap-3 border-b border-linea-2 py-3 text-left hover:bg-rastrojo" onClick={() => select(p.id)}>
+                    <span className="h-3.5 w-3.5 flex-none rounded" style={{ background: cropById(p.cropId).color }} />
+                    <span className="min-w-0 flex-1"><b className="block truncate">{p.name}</b><span className="text-xs text-tinta-3">{cropById(p.cropId).name} · {p.irrigation.system === "secano" ? "secano" : "regadío"}</span></span>
+                    <span className="num text-sm">{ha(p.areaHa)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs leading-relaxed text-tinta-3">Los datos se guardan en este navegador. Haz copias desde Ajustes.</p>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -219,7 +237,7 @@ function PickPanel({ pick, already, name, setName, crop, setCrop, onAdd, onCance
       <div className="flex items-start justify-between gap-3">
         <div>
           <span className="kpi-label">Recinto SIGPAC</span>
-          <h2 className="num mt-1 text-lg font-semibold">{sigpacCode(pick.ref)}</h2>
+          <h2 className="code mt-1 text-lg font-semibold">{sigpacCode(pick.ref)}</h2>
         </div>
         <button className="btn btn-sm btn-ghost" onClick={onCancel} aria-label="Cerrar"><Icon name="x" size={18} /></button>
       </div>
@@ -280,7 +298,7 @@ function SelectedPanel({ parcel, entriesCount, onClose, onDelete }: { parcel: Pa
             {parcel.vulnerable && <span className="chip chip-earth">Zona vulnerable</span>}
           </div>
           <h2 className="font-display text-[26px] leading-tight font-bold">{parcel.name}</h2>
-          <span className="num text-[13px] text-tinta-3">{sigpacCode(parcel.sigpac)} · {ha(parcel.areaHa)}</span>
+          <span className="text-[13px] text-tinta-3"><span className="code">{sigpacCode(parcel.sigpac)}</span> · {ha(parcel.areaHa)}</span>
         </div>
         <button className="btn btn-sm btn-ghost" onClick={onClose} aria-label="Cerrar"><Icon name="x" size={18} /></button>
       </div>
@@ -302,7 +320,7 @@ function SelectedPanel({ parcel, entriesCount, onClose, onDelete }: { parcel: Pa
         <Link href="/app/cuaderno" className="rounded-xl border border-linea p-3 hover:border-olivo">
           <span className="kpi-label">Cuaderno</span>
           <span className="num block text-[22px] font-semibold">{entriesCount}</span>
-          <span className="text-xs text-tinta-2">{pendingN ? `${pendingN} pendiente${pendingN > 1 ? "s" : ""}` : "anotaciones"}</span>
+          <span className="text-xs text-tinta-2">{pendingN ? `${pendingN} pendiente${pendingN > 1 ? "s" : ""}` : entriesCount === 1 ? "anotación" : "anotaciones"}</span>
         </Link>
       </div>
 

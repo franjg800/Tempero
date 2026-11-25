@@ -44,7 +44,7 @@ export default function AjustesPage() {
   return (
     <>
       <TopBar title="Ajustes" />
-      <div className="grid max-w-5xl gap-5 p-6 lg:grid-cols-2">
+      <div className="enter grid max-w-5xl gap-5 px-4 pt-2 pb-6 sm:px-6 lg:grid-cols-2">
         <section className="card flex flex-col gap-4 p-5">
           <h2 className="h2">Explotación</h2>
           {F({ k: "name", label: "Nombre de la explotación" })}

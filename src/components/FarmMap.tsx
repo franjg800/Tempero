@@ -37,6 +37,7 @@ type Props = {
   drawPoints?: [number, number][];
   pick?: SigpacPick | null;
   fitKey?: number; // al cambiar, encuadra todas las parcelas
+  fitTo?: { bounds: [number, number, number, number]; key: number } | null;
   flyTo?: { center: [number, number]; zoom: number; key: number } | null;
   initialView?: { center: [number, number]; zoom: number } | null;
   onSelect?: (id: string | null) => void;
@@ -45,6 +46,7 @@ type Props = {
   onDrawFinish?: () => void;
   onViewChange?: (v: { center: [number, number]; zoom: number }) => void;
   onZoomChange?: (z: number) => void;
+  padding?: { top: number; right: number; bottom: number; left: number };
   className?: string;
 };
 
@@ -121,12 +123,14 @@ export default function FarmMap(props: Props) {
       center: p.initialView?.center ?? [-3.7, 40.2],
       zoom: p.initialView?.zoom ?? 5.4,
       maxPitch: 80,
-      attributionControl: { compact: true },
+      attributionControl: false,
       interactive: p.interactive !== false,
     });
     mapRef.current = map;
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-    map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-left");
+    map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
+    if (p.padding) map.setPadding(p.padding);
 
     map.on("load", () => {
       ready.current = true;
@@ -257,12 +261,36 @@ export default function FarmMap(props: Props) {
     applyTerrain(map, props.terrain ?? null);
   }, [props.terrain]);
 
+  const padKey = props.padding ? Object.values(props.padding).join(",") : "";
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !props.padding) return;
+    map.easeTo({ padding: props.padding, duration: 300 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [padKey]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !props.fitKey) return;
     const b = boundsOf(cb.current.parcels);
     if (b) map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 800 });
   }, [props.fitKey]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !props.fitTo) return;
+    const go = () => {
+      const terr = !!map.getTerrain();
+      const cam = map.cameraForBounds(props.fitTo!.bounds, { padding: 60, maxZoom: 17 });
+      if (!cam) return;
+      const [w, so, e, n] = props.fitTo!.bounds;
+      // con el mapa inclinado, la finca queda lejos del centro: se adelanta el centro hacia el norte
+      const center: [number, number] = terr ? [(w + e) / 2, (so + n) / 2 + (n - so) * 0.28] : [(w + e) / 2, (so + n) / 2];
+      map.easeTo({ center, zoom: Math.min(17, (cam.zoom ?? 15) - (terr ? 0.7 : 0)), pitch: terr ? 52 : map.getPitch(), bearing: terr ? -12 : 0, duration: 1300 });
+    };
+    if (ready.current) go();
+    else map.once("load", go);
+  }, [props.fitTo]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -319,5 +347,5 @@ function applyTerrain(map: maplibregl.Map, ex: number | null) {
     map.addLayer({ id: "hillshade", type: "hillshade", source: "dem-shade", paint: { "hillshade-exaggeration": 0.35, "hillshade-shadow-color": "#14201A" } }, "sigpac-fill");
   }
   map.setTerrain({ source: "dem", exaggeration: ex });
-  if (map.getPitch() < 30) map.easeTo({ pitch: 60, duration: 900 });
+  if (map.getPitch() < 30) map.setPitch(55);
 }

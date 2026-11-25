@@ -37,7 +37,7 @@ export default function PrintPlan() {
             return (
               <tr key={p.id} className="border-b border-linea align-top">
                 <td className="py-1.5 pr-2 font-semibold">{p.name}{p.vulnerable && " (ZV)"}</td>
-                <td className="num py-1.5 pr-2">{sigpacCode(p.sigpac)}</td>
+                <td className="code py-1.5 pr-2">{sigpacCode(p.sigpac)}</td>
                 <td className="num py-1.5 pr-2">{nf(p.areaHa, 2)}</td>
                 <td className="py-1.5 pr-2">{c.name}</td>
                 <td className="py-1.5 pr-2">{p.soil}{p.analysis.pOlsenPpm != null ? ` · P ${p.analysis.pOlsenPpm} · K ${p.analysis.kPpm ?? "—"} ppm` : " · sin análisis"}</td>

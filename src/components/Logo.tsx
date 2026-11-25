@@ -1,4 +1,4 @@
-export function LogoMark({ size = 32, fill = "#2E5B3B", line = "#F3F2EC" }: { size?: number; fill?: string; line?: string }) {
+export function LogoMark({ size = 32, fill = "oklch(0.43 0.075 150)", line = "oklch(0.965 0.008 100)" }: { size?: number; fill?: string; line?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
       <path d="M32 4C32 4 10 27 10 41a22 22 0 0 0 44 0C54 27 32 4 32 4z" fill={fill} />
@@ -9,11 +9,11 @@ export function LogoMark({ size = 32, fill = "#2E5B3B", line = "#F3F2EC" }: { si
   );
 }
 
-export function Logo({ dark = false }: { dark?: boolean }) {
+export function Logo({ dark = false, size = 30 }: { dark?: boolean; size?: number }) {
   return (
-    <span className="flex items-center gap-2.5">
-      <LogoMark size={32} fill={dark ? "#7FB08A" : "#2E5B3B"} line={dark ? "#14201A" : "#F3F2EC"} />
-      <span className={`font-display text-[24px] font-extrabold tracking-tight ${dark ? "text-white" : "text-tinta"}`}>Tempero</span>
+    <span className="flex items-center gap-2">
+      <LogoMark size={size} fill={dark ? "oklch(0.72 0.09 150)" : "oklch(0.43 0.075 150)"} line={dark ? "oklch(0.22 0.022 155)" : "oklch(0.965 0.008 100)"} />
+      <span className={`font-display text-[25px] leading-none font-semibold tracking-[-0.02em] ${dark ? "text-white" : "text-tinta"}`}>Tempero</span>
     </span>
   );
 }
