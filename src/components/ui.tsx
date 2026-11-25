@@ -2,7 +2,7 @@
 
 import { Icon } from "./Icon";
 import type { Parcel } from "@/lib/types";
-import { cropById } from "@/lib/crops";
+import { cropById } from "@/lib/agro";
 import Link from "next/link";
 
 export function Kpi({ label, value, unit, sub, tone }: { label: string; value: string; unit?: string; sub?: string; tone?: "water" | "earth" | "olive" | "solid-water" }) {

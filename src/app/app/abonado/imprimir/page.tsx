@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { useHydrated, useStore } from "@/lib/store";
-import { cropById, MONTHS } from "@/lib/crops";
+import { cropById, MONTHS } from "@/lib/agro";
 import { fertPlan } from "@/lib/fert";
 import { fmtDate, nf, sigpacCode, todayIso } from "@/lib/format";
 

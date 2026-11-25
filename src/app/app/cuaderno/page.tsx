@@ -8,7 +8,7 @@ import { Icon } from "@/components/Icon";
 import { EmptyParcels, Notice } from "@/components/ui";
 import { useHydrated, useStore } from "@/lib/store";
 import { SECTIONS, missingFields, sectionOf, type FieldDef } from "@/lib/notebook";
-import { cropById } from "@/lib/crops";
+import { cropById } from "@/lib/agro";
 import { fmtDate, ha, parcelNames, parcelsArea, todayIso } from "@/lib/format";
 import { exportNotebookXlsx } from "@/lib/exportXlsx";
 import type { Entry, EntryType } from "@/lib/types";

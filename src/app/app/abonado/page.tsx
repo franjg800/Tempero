@@ -6,10 +6,12 @@ import { TopBar } from "@/components/Sidebar";
 import { Icon } from "@/components/Icon";
 import { EmptyParcels, Notice, NumberInput } from "@/components/ui";
 import { useHydrated, useStore } from "@/lib/store";
-import { cropById, MONTHS } from "@/lib/crops";
+import { cropById, MONTHS } from "@/lib/agro";
 import { fertPlan, type Level } from "@/lib/fert";
 import { ha, nf } from "@/lib/format";
 import type { Parcel } from "@/lib/types";
+import { useClimate } from "@/lib/useClimate";
+import { study } from "@/lib/study";
 
 const lvlChip = (l: Level) => (l === "sin análisis" ? "chip-bad" : l === "bajo" ? "chip-warn" : l === "muy alto" ? "chip-water" : "chip-ok");
 
@@ -104,7 +106,10 @@ export default function AbonadoPage() {
 
 function Detail({ parcel }: { parcel: Parcel }) {
   const update = useStore((s) => s.updateParcel);
-  const fp = fertPlan(parcel);
+  const irrigated = parcel.irrigation.system !== "secano";
+  const cl = useClimate(irrigated ? parcel : null);
+  const calcM3 = irrigated && cl.data && cropById(parcel.cropId).agro ? Math.round(study(parcel, cl.data)!.tot.nb * 10) : 0;
+  const fp = fertPlan(parcel, calcM3);
   const c = cropById(parcel.cropId);
   const setA = (patch: Partial<Parcel["analysis"]>) => update(parcel.id, { analysis: { ...parcel.analysis, ...patch } });
   const setF = (patch: Partial<Parcel["fert"]>) => update(parcel.id, { fert: { ...parcel.fert, ...patch } });
@@ -158,7 +163,7 @@ function Detail({ parcel }: { parcel: Parcel }) {
         {parcel.irrigation.system !== "secano" && (
           <>
             <label className="label">Nitratos del agua (mg/L)<NumberInput value={parcel.irrigation.waterNitrateMgL} onChange={(v) => setI({ waterNitrateMgL: v ?? 0 })} /></label>
-            <label className="label">Riego previsto (m³/ha)<NumberInput value={parcel.irrigation.seasonVolumeM3Ha} onChange={(v) => setI({ seasonVolumeM3Ha: v ?? 0 })} /></label>
+            <label className="label">Riego previsto (m³/ha)<NumberInput value={parcel.irrigation.seasonVolumeM3Ha || null} onChange={(v) => setI({ seasonVolumeM3Ha: v ?? 0 })} placeholder={calcM3 ? `${nf(calcM3, 0)} (calculado)` : "sin dato"} /></label>
           </>
         )}
       </fieldset>

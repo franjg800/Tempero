@@ -10,46 +10,37 @@ export type SigpacRef = {
   recinto: number;
 };
 
-export type IrrigationSystem =
-  | "secano"
-  | "goteo"
-  | "microaspersion"
-  | "aspersion"
-  | "pivot"
-  | "gravedad";
-
-export type SoilTexture =
-  | "arenoso"
-  | "franco-arenoso"
-  | "franco"
-  | "franco-limoso"
-  | "franco-arcilloso"
-  | "arcilloso";
+export type IrrigationSystem = "secano" | "goteo" | "microaspersion" | "aspersion" | "pivot" | "gravedad";
 
 export type Irrigation = {
   system: IrrigationSystem;
-  efficiency: number; // 0-1
-  emitterFlowLh: number; // goteo: caudal por gotero
-  emitterSpacingM: number; // goteo: separación entre goteros
-  lineSpacingM: number; // goteo: separación entre ramales
-  rateMmH: number; // aspersión, pívot…: pluviometría del sistema
-  waterNitrateMgL: number; // nitratos en el agua de riego
-  seasonVolumeM3Ha: number; // volumen de riego previsto por campaña
+  efficiency: number; // eficiencia de aplicación 0-1
+  emitterFlowLh: number; // goteo: caudal nominal del gotero (L/h)
+  emitterSpacingM: number; // goteo: separación entre goteros en el lateral (m)
+  lateralsPerRow: number; // goteo: laterales por línea de plantas
+  emittersPerPlant: number | null; // leñosos: goteros por árbol (null = los calcula Tempero)
+  wetPct: number | null; // leñosos: % mínimo de superficie mojada (null = 25 %)
+  cu: number; // coeficiente de uniformidad 0-1
+  ceWater: number; // conductividad eléctrica del agua de riego (dS/m)
+  hoursPerDay: number; // horas de riego disponibles al día
+  rateMmH: number; // aspersión, pívot…: pluviometría del sistema (mm/h)
+  waterNitrateMgL: number; // nitratos del agua de riego (mg/L)
+  seasonVolumeM3Ha: number; // volumen de riego por campaña (0 = el calculado)
 };
 
 export type SoilAnalysis = {
-  nMinKgHa: number | null; // N mineral en el perfil al inicio
+  nMinKgHa: number | null;
   pOlsenPpm: number | null;
   kPpm: number | null;
   organicMatterPct: number | null;
 };
 
 export type FertPlan = {
-  yieldT: number; // rendimiento objetivo (t/ha)
-  prevLegume: boolean; // cultivo anterior leguminosa
-  organicNKgHa: number; // N de estiércoles u orgánicos previstos
-  extraNKgHa: number; // otros aportes que quiera descontar
-  overrides: { n?: number; p?: number; k?: number }; // extracciones por t editadas
+  yieldT: number;
+  prevLegume: boolean;
+  organicNKgHa: number;
+  extraNKgHa: number;
+  overrides: { n?: number; p?: number; k?: number }; // kg por t de cosecha
 };
 
 export type Parcel = {
@@ -61,9 +52,12 @@ export type Parcel = {
   areaHa: number;
   slopePct: number | null;
   altitudeM: number | null;
-  cropId: string;
+  cropId: string; // identificador científico (mismos datos que Brote)
   variety: string;
-  soil: SoilTexture;
+  sowDate: string | null; // siembra o trasplante (anuales)
+  spacing: [number, number]; // marco: entre líneas, entre plantas (m)
+  coverPct: number; // leñosos: cobertura del suelo por la copa (%)
+  soil: string; // clase textural USDA
   vulnerable: boolean;
   irrigation: Irrigation;
   analysis: SoilAnalysis;
@@ -77,7 +71,7 @@ export type EntryType = "tratamiento" | "fertilizacion" | "riego" | "labor" | "c
 export type Entry = {
   id: string;
   type: EntryType;
-  date: string; // AAAA-MM-DD
+  date: string;
   parcelIds: string[];
   status: "hecho" | "pendiente";
   data: Record<string, string>;
@@ -88,7 +82,7 @@ export type Farm = {
   name: string;
   holder: string;
   nif: string;
-  rea: string; // nº de registro de explotación
+  rea: string;
   campaign: string;
   advisor: string;
 };

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { useHydrated, useStore } from "@/lib/store";
 import { SECTIONS } from "@/lib/notebook";
-import { cropById } from "@/lib/crops";
+import { cropById } from "@/lib/agro";
 import { fmtDate, nf, parcelNames, parcelsArea, sigpacCode, todayIso } from "@/lib/format";
 
 export default function PrintNotebook() {

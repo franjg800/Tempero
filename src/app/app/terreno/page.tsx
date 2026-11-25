@@ -7,7 +7,7 @@ import { TopBar } from "@/components/Sidebar";
 import { EmptyParcels, Notice } from "@/components/ui";
 import { useHydrated, useStore } from "@/lib/store";
 import { boundsOf } from "@/lib/geo";
-import { cropById } from "@/lib/crops";
+import { cropById } from "@/lib/agro";
 import { ha, nf } from "@/lib/format";
 
 const FarmMap = dynamic(() => import("@/components/FarmMap"), { ssr: false, loading: () => <div className="absolute inset-0 bg-noche" /> });

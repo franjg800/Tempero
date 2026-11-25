@@ -4,7 +4,7 @@ import writeXlsxFile from "write-excel-file";
 import type { Entry, Farm, Parcel } from "./types";
 import { SECTIONS } from "./notebook";
 import { fmtDate, parcelNames, parcelsArea, sigpacCode } from "./format";
-import { cropById } from "./crops";
+import { cropById } from "./agro";
 
 type Cell = { value: string | number; fontWeight?: "bold"; type?: StringConstructor | NumberConstructor } | null;
 

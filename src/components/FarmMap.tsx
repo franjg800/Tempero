@@ -5,7 +5,7 @@ import maplibregl, { type GeoJSONSource, type MapGeoJSONFeature } from "maplibre
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MultiPolygon, Polygon } from "geojson";
 import type { Parcel, SigpacRef } from "@/lib/types";
-import { cropById } from "@/lib/crops";
+import { cropById } from "@/lib/agro";
 import { centerOf, mergePolygons, boundsOf } from "@/lib/geo";
 
 const PNOA =

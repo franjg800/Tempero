@@ -10,7 +10,7 @@ import { nf } from "@/lib/format";
 
 const NAV = [
   { href: "/app/mapa", label: "Mapa", icon: "map", hint: "Parcelas y recintos" },
-  { href: "/app/riego", label: "Lluvia y riego", icon: "drop", hint: "Balance hídrico" },
+  { href: "/app/riego", label: "Riego", icon: "drop", hint: "Plan anual y diseño" },
   { href: "/app/abonado", label: "Plan de abonado", icon: "sack", hint: "N, P y K" },
   { href: "/app/cuaderno", label: "Cuaderno de campo", icon: "book", hint: "Anotaciones" },
   { href: "/app/terreno", label: "Terreno 3D", icon: "mountain", hint: "Relieve" },
@@ -67,7 +67,7 @@ export function Sidebar() {
 
 const TITLES: Record<string, { sec: string; icon: string }> = {
   "/app/mapa": { sec: "Mapa", icon: "map" },
-  "/app/riego": { sec: "Lluvia y riego", icon: "drop" },
+  "/app/riego": { sec: "Riego", icon: "drop" },
   "/app/abonado": { sec: "Plan de abonado", icon: "sack" },
   "/app/cuaderno": { sec: "Cuaderno de campo", icon: "book" },
   "/app/terreno": { sec: "Terreno 3D", icon: "mountain" },

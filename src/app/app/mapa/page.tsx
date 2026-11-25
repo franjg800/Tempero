@@ -6,9 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 import { TopBar } from "@/components/Sidebar";
 import { Icon } from "@/components/Icon";
 import { Notice } from "@/components/ui";
-import { ParcelEditor } from "@/components/ParcelEditor";
+import { CropSelect as CropSel, ParcelEditor } from "@/components/ParcelEditor";
 import { newParcel, useHydrated, useStore } from "@/lib/store";
-import { cropById, cropFromUso, CROPS, USOS_SIGPAC } from "@/lib/crops";
+import { cropById, cropFromUso } from "@/lib/agro";
+import { USOS_SIGPAC } from "@/lib/irrigation";
 import { ha, nf, sigpacCode, longDate } from "@/lib/format";
 import { areaHa } from "@/lib/geo";
 import { sumLast, useWeather } from "@/lib/useWater";
@@ -47,7 +48,7 @@ export default function MapaPage() {
   const [fly, setFly] = useState<{ center: [number, number]; zoom: number; key: number } | null>(null);
   const [fitKey, setFitKey] = useState(0);
   const [newName, setNewName] = useState("");
-  const [newCrop, setNewCrop] = useState("trigo");
+  const [newCrop, setNewCrop] = useState("triticum-aestivum");
   const selected = parcels.find((p) => p.id === selectedId) ?? null;
   const wide = useWide();
   const total = parcels.reduce((s, p) => s + p.areaHa, 0);
@@ -222,11 +223,7 @@ export default function MapaPage() {
 }
 
 function CropSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <select className="input" value={value} onChange={(e) => onChange(e.target.value)}>
-      {CROPS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-    </select>
-  );
+  return <CropSel value={value} onChange={onChange} />;
 }
 
 function PickPanel({ pick, already, name, setName, crop, setCrop, onAdd, onCancel, onOpen }: {

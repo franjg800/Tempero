@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useEffect, useState } from "react";
 import type { Entry, Farm, Parcel } from "./types";
-import { cropById, IRRIGATION } from "./crops";
+import { cropById, LEGACY } from "./agro";
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -65,7 +65,15 @@ export const useStore = create<State>()(
       importAll: (data) => set({ farm: { ...defaultFarm, ...data.farm }, parcels: data.parcels ?? [], entries: data.entries ?? [], selectedId: null }),
       reset: () => set({ farm: defaultFarm, parcels: [], entries: [], selectedId: null, mapView: null }),
     }),
-    { name: "tempero-v1", version: 1 },
+    {
+      name: "tempero-v1",
+      version: 2,
+      migrate: (persisted, version) => {
+        const st = persisted as { parcels?: Parcel[] };
+        if (version < 2 && st?.parcels) st.parcels = st.parcels.map(upgradeParcel);
+        return persisted as State;
+      },
+    },
   ),
 );
 
@@ -81,8 +89,48 @@ export function useHydrated() {
   return h;
 }
 
+export const DEFAULT_IRRIGATION: Parcel["irrigation"] = {
+  system: "secano",
+  efficiency: 1,
+  emitterFlowLh: 2.2,
+  emitterSpacingM: 0.5,
+  lateralsPerRow: 1,
+  emittersPerPlant: null,
+  wetPct: null,
+  cu: 0.9,
+  ceWater: 1,
+  hoursPerDay: 20,
+  rateMmH: 6,
+  waterNitrateMgL: 0,
+  seasonVolumeM3Ha: 0,
+};
+
+/** Datos guardados con la versión 1 → formato actual. */
+export function upgradeParcel(p: Parcel): Parcel {
+  const cropId = LEGACY[p.cropId] ?? p.cropId;
+  const c = cropById(cropId);
+  const soilMap: Record<string, string> = { arenoso: "Arenoso", "franco-arenoso": "Franco arenoso", franco: "Franco", "franco-limoso": "Franco limoso", "franco-arcilloso": "Franco arcilloso", arcilloso: "Arcilloso" };
+  return {
+    ...p,
+    cropId,
+    sowDate: p.sowDate ?? null,
+    spacing: p.spacing ?? (c.agro ? [c.agro.sp[0], c.agro.sp[1]] : [1, 1]),
+    coverPct: p.coverPct ?? 50,
+    soil: soilMap[p.soil] ?? p.soil ?? "Franco",
+    irrigation: { ...DEFAULT_IRRIGATION, ...p.irrigation },
+  };
+}
+
+export function defaultSow(cropId: string, now = new Date()): string | null {
+  const c = cropById(cropId);
+  if (!c.agro || c.woody || c.agro.sow == null) return null;
+  const m = c.agro.sow - 1;
+  const y = m < now.getMonth() - 3 ? now.getFullYear() + 1 : now.getFullYear();
+  return `${y}-${String(m + 1).padStart(2, "0")}-01`;
+}
+
 export function newParcel(init: Partial<Parcel> & Pick<Parcel, "geometry" | "areaHa" | "name">): Parcel {
-  const cropId = init.cropId ?? "trigo";
+  const cropId = init.cropId ?? "triticum-aestivum";
   const crop = cropById(cropId);
   return {
     id: uid(),
@@ -92,20 +140,14 @@ export function newParcel(init: Partial<Parcel> & Pick<Parcel, "geometry" | "are
     altitudeM: null,
     cropId,
     variety: "",
-    soil: "franco",
+    sowDate: defaultSow(cropId),
+    spacing: crop.agro ? [crop.agro.sp[0], crop.agro.sp[1]] : [1, 1],
+    coverPct: 50,
+    soil: "Franco",
     vulnerable: false,
-    irrigation: {
-      system: "secano",
-      efficiency: IRRIGATION[0].eff,
-      emitterFlowLh: 2.2,
-      emitterSpacingM: 0.5,
-      lineSpacingM: 1,
-      rateMmH: 6,
-      waterNitrateMgL: 0,
-      seasonVolumeM3Ha: 0,
-    },
+    irrigation: { ...DEFAULT_IRRIGATION },
     analysis: { nMinKgHa: null, pOlsenPpm: null, kPpm: null, organicMatterPct: null },
-    fert: { yieldT: crop.yieldT, prevLegume: false, organicNKgHa: 0, extraNKgHa: 0, overrides: {} },
+    fert: { yieldT: crop.agro?.y ?? 0, prevLegume: false, organicNKgHa: 0, extraNKgHa: 0, overrides: {} },
     createdAt: new Date().toISOString(),
     ...init,
   };
