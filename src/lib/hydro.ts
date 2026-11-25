@@ -409,3 +409,81 @@ export function exitPoints(st: TerrainStats | null): FeatureCollection<Point, { 
     })),
   };
 }
+
+/**
+ * Líneas de flujo fijas: desde puntos repartidos por la parcela se sigue la máxima pendiente del terreno
+ * (gradiente de la superficie; en los llanos, la dirección de drenaje D8) hasta que el agua sale de la parcela,
+ * cae en una charca o se junta con otra línea.
+ */
+export function flowLines(d: Dem, hy: Hydro, mask: Uint8Array, maxLines = 240): FeatureCollection<LineString, { len: number }> {
+  const { w, h, z } = d;
+  const features: Feature<LineString, { len: number }>[] = [];
+  let M = 0;
+  for (let i = 0; i < mask.length; i++) if (mask[i]) M++;
+  if (!M) return { type: "FeatureCollection", features };
+  const s = Math.max(1.5, Math.sqrt(M / maxLines));
+  const seeds: [number, number, number][] = [];
+  for (let y = s / 2; y < h; y += s)
+    for (let x = s / 2; x < w; x += s) {
+      const c = Math.floor(y) * w + Math.floor(x);
+      if (mask[c] && !Number.isNaN(z[c])) seeds.push([x, y, z[c]]);
+    }
+  seeds.sort((a, b) => b[2] - a[2]);
+  const visited = new Uint8Array(w * h);
+  const bil = (px: number, py: number) => {
+    const fx = Math.min(w - 1.001, Math.max(0, px - 0.5)), fy = Math.min(h - 1.001, Math.max(0, py - 0.5));
+    const i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j;
+    const a = z[j * w + i], b = z[j * w + i + 1], c = z[(j + 1) * w + i], e = z[(j + 1) * w + i + 1];
+    return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + e * tx) * ty;
+  };
+  const STEP = 0.4;
+  for (const [sx, sy] of seeds) {
+    const c0 = Math.floor(sy) * w + Math.floor(sx);
+    if (visited[c0]) continue;
+    const path: [number, number][] = [[sx, sy]];
+    let px = sx, py = sy, last = c0;
+    visited[c0] = 1;
+    for (let k = 0; k < 4000; k++) {
+      const ci = Math.floor(py) * w + Math.floor(px);
+      if (hy.pool[ci] && k > 0) break;
+      const gx = (bil(px + 0.5, py) - bil(px - 0.5, py)) / d.cellM[0];
+      const gy = (bil(px, py + 0.5) - bil(px, py - 0.5)) / d.cellM[1];
+      if (Number.isNaN(gx) || Number.isNaN(gy)) break;
+      const mag = Math.hypot(gx, gy);
+      let dx: number, dy: number;
+      if (mag > 0.0008) {
+        dx = -gx / mag;
+        dy = -gy / mag;
+      } else {
+        const r = hy.rec[ci];
+        if (r < 0) break;
+        dx = (r % w) + 0.5 - px;
+        dy = ((r / w) | 0) + 0.5 - py;
+        const L = Math.hypot(dx, dy) || 1;
+        dx /= L;
+        dy /= L;
+      }
+      px += dx * STEP;
+      py += dy * STEP;
+      if (px < 0 || py < 0 || px >= w || py >= h) break;
+      const nc = Math.floor(py) * w + Math.floor(px);
+      if (nc !== last) {
+        last = nc;
+        if (visited[nc]) {
+          path.push([px, py]);
+          break;
+        }
+        visited[nc] = 1;
+      }
+      if (k % 2 === 1) path.push([px, py]);
+      if (!mask[nc]) {
+        path.push([px, py]);
+        break;
+      }
+    }
+    if (path.length < 4) continue;
+    const coords = chaikin(path).map(([x, y]) => d.toLngLat(x, y));
+    features.push({ type: "Feature", properties: { len: path.length * STEP * 2 }, geometry: { type: "LineString", coordinates: coords } });
+  }
+  return { type: "FeatureCollection", features };
+}

@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Logo } from "./Logo";
+import { Logo, LogoMark } from "./Logo";
+
+// Textos que se ocultan con el menú plegado (escritorio)
+const fade = "transition-opacity duration-200 lg:opacity-0 lg:group-hover/side:opacity-100 lg:group-focus-within/side:opacity-100";
 import { Icon } from "./Icon";
 import { useHydrated, useStore } from "@/lib/store";
 import { nf } from "@/lib/format";
@@ -32,35 +35,53 @@ export function Sidebar() {
         <Link href="/app/mapa"><Logo dark /></Link>
         <button className="btn btn-sm text-white" aria-label="Menú" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="menu" /></button>
       </div>
-      <aside className={`no-print relative flex-col gap-1 overflow-hidden bg-noche px-3 py-5 text-[oklch(0.84_0.015_150)] lg:flex lg:w-[244px] lg:flex-none ${open ? "flex" : "hidden"}`}>
+      {/* En escritorio el menú va plegado (solo iconos) y se despliega al pasar el ratón por encima */}
+      <div className={`no-print lg:relative lg:w-[76px] lg:flex-none ${open ? "" : "hidden lg:block"}`}>
+      <aside
+        className="group/side relative flex flex-col gap-1 overflow-hidden bg-noche px-3 py-5 text-[oklch(0.84_0.015_150)] lg:absolute lg:inset-y-0 lg:left-0 lg:z-40 lg:w-[76px] lg:transition-[width,box-shadow] lg:delay-150 lg:duration-300 lg:ease-[cubic-bezier(0.25,1,0.5,1)] lg:hover:w-[252px] lg:hover:delay-0 lg:hover:shadow-[12px_0_40px_-12px_oklch(0.15_0.02_155/0.55)] lg:focus-within:w-[252px]"
+      >
         <svg aria-hidden="true" className="pointer-events-none absolute -bottom-10 -left-16 h-80 w-80 opacity-[0.07]" viewBox="0 0 200 200" fill="none" stroke="currentColor" strokeWidth="1.2">
           {[20, 34, 48, 62, 76, 90].map((r) => <ellipse key={r} cx="100" cy="110" rx={r * 1.25} ry={r} transform="rotate(-18 100 110)" />)}
         </svg>
-        <Link href="/" className="hidden px-2.5 pb-5 lg:block"><Logo dark /></Link>
-        <Link href="/app/ajustes" className="group mb-4 flex flex-col items-start gap-0.5 rounded-2xl border border-noche-3 bg-noche-2/80 px-3.5 py-3 text-left transition-colors hover:border-olivo-vivo/40">
-          <span className="text-[10.5px] font-bold tracking-[0.08em] text-[oklch(0.7_0.02_150)]">EXPLOTACIÓN</span>
-          <span className="font-display text-[17px] leading-tight font-semibold text-white">{hyd ? farm.name : "…"}</span>
-          <span className="num text-xs text-[oklch(0.7_0.02_150)]">{hyd ? `${nf(total, 1)} ha · ${parcels.length} parcela${parcels.length === 1 ? "" : "s"} · ${farm.campaign}` : " "}</span>
+        <Link href="/" className="hidden px-2.5 pb-5 lg:block" aria-label="Tempero, portada">
+          <span className="flex items-center gap-2">
+            <LogoMark size={30} fill="oklch(0.72 0.09 150)" line="oklch(0.22 0.022 155)" />
+            <span className={`font-display text-[25px] leading-none font-semibold tracking-[-0.02em] text-white ${fade}`}>Tempero</span>
+          </span>
+        </Link>
+        <Link href="/app/ajustes" title={hyd ? farm.name : undefined} className="group mb-4 flex items-center gap-3 rounded-2xl border border-noche-3 bg-noche-2/80 p-1.5 text-left transition-colors hover:border-olivo-vivo/40 lg:w-[226px]">
+          <span className="font-display flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-olivo text-[17px] font-semibold text-white">{hyd ? (farm.name.trim()[0] ?? "T").toUpperCase() : ""}</span>
+          <span className={`flex min-w-0 flex-col ${fade}`}>
+            <span className="text-[10px] font-bold tracking-[0.08em] text-[oklch(0.7_0.02_150)]">EXPLOTACIÓN</span>
+            <span className="font-display truncate text-[16px] leading-tight font-semibold text-white">{hyd ? farm.name : "…"}</span>
+            <span className="num truncate text-[11.5px] text-[oklch(0.7_0.02_150)]">{hyd ? `${nf(total, 1)} ha · ${parcels.length} parc. · ${farm.campaign}` : " "}</span>
+          </span>
         </Link>
         <nav aria-label="Secciones" className="flex flex-col gap-0.5">
           {NAV.map((n) => {
             const on = path.startsWith(n.href);
             return (
-              <Link key={n.href} href={n.href} onClick={() => setOpen(false)} aria-current={on ? "page" : undefined}
-                className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition-colors duration-200 ${on ? "bg-olivo font-semibold text-white shadow-[inset_0_1px_0_oklch(1_0_0/0.12),0_6px_18px_-8px_oklch(0.43_0.075_150/0.9)]" : "font-medium hover:bg-noche-2 hover:text-white"}`}>
-                <Icon name={n.icon} className={`transition-transform duration-200 ${on ? "" : "group-hover:-translate-y-px"}`} />
-                <span className="flex-1">{n.label}</span>
-                {n.href === "/app/cuaderno" && hyd && pending > 0 && <span className="num rounded-full bg-trigo px-1.5 text-[11px] font-bold text-noche">{pending}</span>}
+              <Link key={n.href} href={n.href} onClick={() => setOpen(false)} aria-current={on ? "page" : undefined} title={n.label}
+                className={`group relative flex items-center gap-3 rounded-xl px-[14px] py-2.5 text-[15px] whitespace-nowrap transition-colors duration-200 lg:w-[226px] ${on ? "bg-olivo font-semibold text-white shadow-[inset_0_1px_0_oklch(1_0_0/0.12),0_6px_18px_-8px_oklch(0.43_0.075_150/0.9)]" : "font-medium hover:bg-noche-2 hover:text-white"}`}>
+                <Icon name={n.icon} className={`flex-none transition-transform duration-200 ${on ? "" : "group-hover:-translate-y-px"}`} />
+                <span className={`flex-1 ${fade}`}>{n.label}</span>
+                {n.href === "/app/cuaderno" && hyd && pending > 0 && (
+                  <>
+                    <span className={`num rounded-full bg-trigo px-1.5 text-[11px] font-bold text-noche ${fade}`}>{pending}</span>
+                    <span aria-hidden className="absolute top-2 left-7 hidden h-2 w-2 rounded-full bg-trigo lg:block lg:group-hover/side:hidden" />
+                  </>
+                )}
               </Link>
             );
           })}
         </nav>
         <div className="flex-1" />
-        <Link href="/app/ajustes" onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition-colors ${path.startsWith("/app/ajustes") ? "bg-olivo font-semibold text-white" : "hover:bg-noche-2 hover:text-white"}`}>
-          <Icon name="gear" />Ajustes
+        <Link href="/app/ajustes" onClick={() => setOpen(false)} title="Ajustes" className={`flex items-center gap-3 rounded-xl px-[14px] py-2.5 text-[15px] whitespace-nowrap transition-colors lg:w-[226px] ${path.startsWith("/app/ajustes") ? "bg-olivo font-semibold text-white" : "hover:bg-noche-2 hover:text-white"}`}>
+          <Icon name="gear" className="flex-none" /><span className={fade}>Ajustes</span>
         </Link>
-        <p className="px-3 pt-2 text-[11px] leading-snug text-[oklch(0.62_0.02_150)]">Tus datos se guardan en este navegador.</p>
+        <p className={`px-3 pt-2 text-[11px] leading-snug whitespace-nowrap text-[oklch(0.62_0.02_150)] ${fade}`}>Tus datos se guardan en este navegador.</p>
       </aside>
+      </div>
     </>
   );
 }

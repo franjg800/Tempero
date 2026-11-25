@@ -10,8 +10,9 @@ import { boundsOf, centerOf } from "@/lib/geo";
 import { cropById } from "@/lib/agro";
 import { ha, nf } from "@/lib/format";
 import { bboxSizeM, fetchIgnDem, padBBox, sample, type Dem } from "@/lib/dem";
-import { analyse, contourLines, contourStep, maskOf, poolPolygons, stats, streams, type Hydro } from "@/lib/hydro";
+import { analyse, contourLines, contourStep, flowLines, maskOf, poolPolygons, stats, streams, type Hydro } from "@/lib/hydro";
 import type { MaquetaApi } from "@/components/terreno/Maqueta";
+import { SLOPE_CLASSES, rampColor, type Base } from "@/lib/terrainColors";
 import type { Parcel } from "@/lib/types";
 import { CRS, buildModel, guessCrs, loadModel, modelDem, parseCad, saveModel, type CadData, type CadModel, type CrsId } from "@/lib/cad";
 import { TIME_SCALE } from "@/lib/flow";
@@ -49,6 +50,7 @@ type Analysis = {
   contours: GeoJSON.FeatureCollection;
   streams: GeoJSON.FeatureCollection;
   pools: GeoJSON.FeatureCollection;
+  flow: GeoJSON.FeatureCollection;
   stats: ReturnType<typeof stats>;
   spawn: Int32Array;
 };
@@ -58,7 +60,9 @@ function Terreno() {
   const params = useSearchParams();
   const { parcels } = useStore();
   const [focus, setFocus] = useState<string>("finca:0");
-  const [ex, setEx] = useState(2);
+  const [exManual, setExManual] = useState<number | null>(null); // null = automático
+  const [base, setBase] = useState<Base>("orto");
+  const [showFlow, setShowFlow] = useState(true);
   const [crop, setCrop] = useState<"parcelas" | "entorno">("parcelas");
   const api = useRef<MaquetaApi | null>(null);
 
@@ -78,7 +82,7 @@ function Terreno() {
   const [showContours, setShowContours] = useState(true);
   const [showStreams, setShowStreams] = useState(true);
   const [showPools, setShowPools] = useState(true);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [mode, setMode] = useState<"lluvia" | "punto">("lluvia");
   const [point, setPoint] = useState<[number, number] | null>(null);
 
@@ -104,7 +108,10 @@ function Terreno() {
   }, [parcels, groups, focus]);
   const selKey = sel.map((p) => p.id).join(",");
   const selPolys = useMemo(() => sel.map((p) => p.geometry), [sel]);
-  useEffect(() => setPoint(null), [selKey]);
+  useEffect(() => {
+    setPoint(null);
+    setExManual(null);
+  }, [selKey]);
 
   // MDT del IGN para la zona elegida
   useEffect(() => {
@@ -180,6 +187,7 @@ function Terreno() {
         streams: streams(dem, hy, Math.max(Math.round(2500 / (dem.cellM[0] * dem.cellM[1])), Math.round(valid / 300))),
         pools: poolPolygons(dem, hy),
         stats: stats(dem, hy, mask),
+        flow: flowLines(dem, hy, mask),
         spawn: Int32Array.from(cells),
       });
       setAnalysing(false);
@@ -239,6 +247,12 @@ function Terreno() {
   const selHa = sel.reduce((a, x) => a + x.areaHa, 0);
   const b = boundsOf(sel);
   const st = an?.stats ?? null;
+  // Exageración automática: que el desnivel ocupe ~9 % del tamaño de la maqueta (en llano se nota; en sierra, ×1)
+  const sizeM = b ? Math.max(...bboxSizeM(b)) : 500;
+  const relief = st ? Math.max(0.4, st.zMax - st.zMin) : 5;
+  const exAuto = Math.min(80, Math.max(1, Math.round(((0.09 * sizeM) / relief) * 2) / 2));
+  const ex = exManual ?? exAuto;
+  const exMax = Math.max(10, Math.ceil(exAuto * 2.5));
   const farFromFarm = cadDem && b ? distKm(cadDem.bounds, b) : 0;
   const areaHa = an ? (an.spawn.length * an.dem.cellM[0] * an.dem.cellM[1]) / 10000 : 0;
   const nParticles = Math.round(Math.min(1200, Math.max(200, areaHa * 400)));
@@ -265,7 +279,9 @@ function Terreno() {
             crop={crop}
             ex={ex}
             overlays={an}
-            show={{ contours: showContours, streams: showStreams, pools: showPools }}
+            show={{ contours: showContours, streams: showStreams, pools: showPools, flow: showFlow }}
+            base={base}
+            step={an.step}
             exits={st?.exits ?? []}
             playing={playing}
             mode={mode}
@@ -275,6 +291,12 @@ function Terreno() {
             apiRef={api}
           />
         )}
+        {an && (
+          <div className="pointer-events-none absolute top-[92px] left-6 rounded-lg bg-white/90 px-2.5 py-1.5 text-[12.5px] text-tinta-2 shadow-[0_2px_8px_oklch(0.2_0.02_155/0.1)]">
+            Alturas exageradas <b className="num text-tinta">×{nf(ex, ex % 1 ? 1 : 0)}</b> · desnivel real {st ? nf(st.zMax - st.zMin, 1) : "–"} m
+          </div>
+        )}
+        {an && base !== "orto" && <Legend base={base} zmin={st?.zMin ?? 0} zmax={st?.zMax ?? 1} />}
         <div className="pointer-events-none absolute bottom-6 left-1/2 hidden -translate-x-1/2 rounded-xl bg-white/90 px-3.5 py-2 text-[13px] text-tinta-2 shadow-[0_2px_8px_oklch(0.2_0.02_155/0.1)] lg:block">
           {mode === "punto" ? (point ? "Clic en otro sitio para mover el punto de riego" : "Haz clic en el terreno donde sale el agua") : "Arrastra para girar · clic derecho para desplazar · rueda para acercar"}
         </div>
@@ -306,9 +328,10 @@ function Terreno() {
           </div>
           <div className="flex-1" />
           <label className="flex items-center gap-2.5 pr-1 text-sm font-semibold text-tinta-2">Relieve
-            <input type="range" min={1} max={6} step={0.5} value={ex} onChange={(e) => setEx(Number(e.target.value))} className="w-28 accent-olivo" aria-label="Exagerar relieve" />
-            <span className="num w-8">×{ex}</span>
+            <input type="range" min={1} max={exMax} step={0.5} value={ex} onChange={(e) => setExManual(Number(e.target.value))} className="w-28 accent-olivo" aria-label="Exagerar relieve" />
+            <span className="num w-10">×{nf(ex, ex % 1 ? 1 : 0)}</span>
           </label>
+          <button className={`btn btn-sm ${exManual == null ? "btn-primary" : "btn-ghost"}`} aria-pressed={exManual == null} onClick={() => setExManual(null)} title="Exagera más el relieve cuanto más llano es el terreno">Auto</button>
           <button className="btn btn-ghost btn-sm" onClick={download} disabled={!an}>Descargar imagen</button>
         </TopBar>
       </div>
@@ -378,24 +401,36 @@ function Terreno() {
 
         {ign.error && src === "ign" && <Notice>No se ha podido cargar el relieve: {ign.error}.</Notice>}
 
+        {/* Vista */}
+        <div className="flex flex-col gap-2.5 rounded-xl border border-linea p-3">
+          <b className="text-sm">Qué ver sobre el terreno</b>
+          <div role="radiogroup" aria-label="Fondo" className="flex rounded-xl bg-rastrojo p-1">
+            {([["orto", "Ortofoto"], ["cotas", "Cotas"], ["pendientes", "Pendientes"]] as const).map(([id, label]) => (
+              <button key={id} role="radio" aria-checked={base === id} onClick={() => setBase(id)}
+                className={`h-8 flex-1 rounded-lg text-[13px] font-semibold ${base === id ? "bg-white text-tinta shadow-[0_1px_3px_oklch(0.2_0.02_155/0.15)]" : "text-tinta-2"}`}>{label}</button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px]">
+            <Toggle on={showFlow} set={setShowFlow} label="Líneas de flujo" />
+            <Toggle on={showContours} set={setShowContours} label={`Curvas de nivel${an ? ` (${nf(an.step, an.step < 1 ? 2 : 0)} m)` : ""}`} />
+            <Toggle on={showStreams} set={setShowStreams} label="Vaguadas" />
+            <Toggle on={showPools} set={setShowPools} label="Encharcamientos" />
+          </div>
+        </div>
+
         {/* Agua */}
         <div className="flex flex-col gap-2 rounded-xl border border-linea p-3">
           <div className="flex items-center gap-2">
-            <b className="flex-1 text-sm">Agua sobre el terreno</b>
-            <button className="btn btn-sm btn-primary" onClick={() => setPlaying(!playing)} aria-pressed={playing}>{playing ? "Pausa" : "Reproducir"}</button>
+            <b className="flex-1 text-sm">Agua animada</b>
+            <button className={`btn btn-sm ${playing ? "btn-primary" : "btn-ghost"}`} onClick={() => setPlaying(!playing)} aria-pressed={playing}>{playing ? "Pausa" : "Animar"}</button>
           </div>
           <div role="radiogroup" aria-label="Origen del agua" className="flex rounded-xl bg-rastrojo p-1">
             {([["lluvia", "Lluvia"], ["punto", "Punto de riego"]] as const).map(([id, label]) => (
-              <button key={id} role="radio" aria-checked={mode === id} onClick={() => setMode(id)}
+              <button key={id} role="radio" aria-checked={mode === id} onClick={() => { setMode(id); setPlaying(true); }}
                 className={`h-8 flex-1 rounded-lg text-[13px] font-semibold ${mode === id ? "bg-white text-tinta shadow-[0_1px_3px_oklch(0.2_0.02_155/0.15)]" : "text-tinta-2"}`}>{label}</button>
             ))}
           </div>
-          <span className="text-xs text-tinta-3">{mode === "lluvia" ? "Llueve sobre " + (p ? "la parcela" : "las parcelas de la finca") : point ? "El agua sale del punto marcado" : "Marca en el mapa la boca de riego, hidrante o cabecera"} · 1 s de animación = {TIME_SCALE / 60} min</span>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-[13px]">
-            <Toggle on={showContours} set={setShowContours} label={`Curvas de nivel${an ? ` (${nf(an.step, an.step < 1 ? 2 : 0)} m)` : ""}`} />
-            <Toggle on={showStreams} set={setShowStreams} label="Escorrentía" />
-            <Toggle on={showPools} set={setShowPools} label="Encharcamientos" />
-          </div>
+          <span className="text-xs text-tinta-3">{mode === "lluvia" ? "Llueve sobre " + (p ? "la parcela" : "las parcelas de la finca") : point ? "El agua sale del punto marcado" : "Marca en la maqueta la boca de riego, hidrante o cabecera"} · 1 s de animación = {TIME_SCALE / 60} min</span>
         </div>
 
         {/* Resultados */}
@@ -432,6 +467,32 @@ function Terreno() {
           {an ? an.dem.source : "Relieve"}. Escorrentía por la dirección de máxima pendiente (D8) tras rellenar los hoyos del terreno (Priority-Flood). Ortofoto PNOA © IGN.
         </p>
       </section>
+    </div>
+  );
+}
+
+function Legend({ base, zmin, zmax }: { base: Base; zmin: number; zmax: number }) {
+  const box = "pointer-events-none absolute bottom-6 right-6 rounded-xl bg-white/92 p-2.5 text-[11.5px] text-tinta-2 shadow-[0_2px_8px_oklch(0.2_0.02_155/0.12)]";
+  if (base === "cotas") {
+    const stops = [0, 0.25, 0.5, 0.75, 1].map((t) => `rgb(${rampColor(t).map(Math.round).join(",")}) ${t * 100}%`).join(",");
+    return (
+      <div className={box}>
+        <b className="mb-1 block text-[11px] font-bold tracking-wide text-tinta">COTA (m)</b>
+        <div className="flex items-stretch gap-2">
+          <div className="w-3 rounded" style={{ background: `linear-gradient(to top, ${stops})`, height: 96 }} />
+          <div className="num flex flex-col justify-between">
+            {[1, 0.75, 0.5, 0.25, 0].map((t) => <span key={t}>{nf(zmin + (zmax - zmin) * t, 1)}</span>)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className={box}>
+      <b className="mb-1 block text-[11px] font-bold tracking-wide text-tinta">PENDIENTE</b>
+      {SLOPE_CLASSES.map(([, c, l]) => (
+        <div key={l} className="flex items-center gap-1.5"><span className="h-2.5 w-3.5 rounded-sm" style={{ background: c }} />{l}</div>
+      ))}
     </div>
   );
 }

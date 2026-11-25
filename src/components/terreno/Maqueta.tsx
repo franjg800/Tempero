@@ -10,6 +10,8 @@ import { sample, type Dem } from "@/lib/dem";
 import type { Exit, Hydro } from "@/lib/hydro";
 import { TRAIL, WaterSim } from "@/lib/flow";
 
+import { SLOPE_CLASSES, rampColor, type Base } from "@/lib/terrainColors";
+
 export type MaquetaApi = { snapshot: () => Promise<Blob | null> };
 
 type Props = {
@@ -19,8 +21,10 @@ type Props = {
   polys: (Polygon | MultiPolygon)[];
   crop: "parcelas" | "entorno";
   ex: number;
-  overlays: { contours: FeatureCollection; streams: FeatureCollection; pools: FeatureCollection };
-  show: { contours: boolean; streams: boolean; pools: boolean };
+  overlays: { contours: FeatureCollection; streams: FeatureCollection; pools: FeatureCollection; flow: FeatureCollection };
+  show: { contours: boolean; streams: boolean; pools: boolean; flow: boolean };
+  base: Base;
+  step: number; // equidistancia de las curvas
   exits: Exit[];
   playing: boolean;
   mode: "lluvia" | "punto";
@@ -93,7 +97,7 @@ const lat2y = (lat: number, z: number) => {
   return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z * 256;
 };
 
-type Mosaic = { z: number; tx0: number; ty0: number; W: number; H: number; px: (lng: number, lat: number) => [number, number]; key: string };
+type Mosaic = { z: number; tx0: number; ty0: number; W: number; H: number; px: (lng: number, lat: number) => [number, number]; ll: (x: number, y: number) => [number, number]; key: string };
 
 function mosaicLayout(b: Region["bbox"]): Mosaic {
   const [w, s, e, n] = b;
@@ -104,6 +108,11 @@ function mosaicLayout(b: Region["bbox"]): Mosaic {
   return {
     z, tx0, ty0, W: (tx1 - tx0 + 1) * 256, H: (ty1 - ty0 + 1) * 256,
     px: (lng, lat) => [lon2x(lng, z) - tx0 * 256, lat2y(lat, z) - ty0 * 256],
+    ll: (x, y) => {
+      const n = 2 ** z * 256;
+      const X = x + tx0 * 256, Y = y + ty0 * 256;
+      return [(X / n) * 360 - 180, (Math.atan(Math.sinh(Math.PI * (1 - (2 * Y) / n))) * 180) / Math.PI];
+    },
     key: `${z}/${tx0}/${ty0}/${tx1}/${ty1}`,
   };
 }
@@ -141,7 +150,7 @@ function loadMosaic(m: Mosaic): Promise<HTMLCanvasElement> {
   return p;
 }
 
-function drawOverlays(ctx: CanvasRenderingContext2D, m: Mosaic, o: Props["overlays"], show: Props["show"], polys: Props["polys"], crop: Props["crop"]) {
+function drawOverlays(ctx: CanvasRenderingContext2D, m: Mosaic, o: Props["overlays"], show: Props["show"], polys: Props["polys"], crop: Props["crop"], step: number) {
   const u = Math.max(1, m.W / 1100);
   const path = (coords: number[][]) => {
     coords.forEach(([lng, lat], i) => {
@@ -160,31 +169,15 @@ function drawOverlays(ctx: CanvasRenderingContext2D, m: Mosaic, o: Props["overla
       ctx.fillStyle = (f.properties?.depth ?? 0) >= 0.2 ? "rgba(30,94,154,0.55)" : "rgba(70,160,225,0.5)";
       ctx.fill("evenodd");
     }
-  if (show.contours) {
+  if (show.contours)
     for (const f of o.contours.features) {
       const master = !!f.properties?.master;
       ctx.beginPath();
       path((f.geometry as GeoJSON.LineString).coordinates);
-      ctx.strokeStyle = master ? "rgba(255,247,226,0.92)" : "rgba(255,247,226,0.5)";
-      ctx.lineWidth = master ? 1.8 * u : 0.9 * u;
+      ctx.strokeStyle = master ? "rgba(255,247,226,0.95)" : "rgba(255,247,226,0.62)";
+      ctx.lineWidth = master ? 1.8 * u : 1 * u;
       ctx.stroke();
     }
-    ctx.font = `600 ${Math.round(11 * u)}px "Instrument Sans", system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    for (const f of o.contours.features) {
-      if (!f.properties?.master) continue;
-      const c = (f.geometry as GeoJSON.LineString).coordinates;
-      if (c.length < 12) continue;
-      const [x, y] = m.px(c[Math.floor(c.length / 2)][0], c[Math.floor(c.length / 2)][1]);
-      const t = (Math.round(f.properties.z * 10) / 10).toLocaleString("es-ES");
-      ctx.lineWidth = 3 * u;
-      ctx.strokeStyle = "rgba(20,32,26,0.75)";
-      ctx.strokeText(t, x, y);
-      ctx.fillStyle = "#FFF7E2";
-      ctx.fillText(t, x, y);
-    }
-  }
   if (show.streams)
     for (const f of o.streams.features) {
       ctx.beginPath();
@@ -194,6 +187,39 @@ function drawOverlays(ctx: CanvasRenderingContext2D, m: Mosaic, o: Props["overla
       ctx.lineWidth = Math.min(6, 0.6 + (a - 3) * 0.6) * u;
       ctx.stroke();
     }
+  if (show.flow)
+    for (const f of o.flow.features) {
+      const c = (f.geometry as GeoJSON.LineString).coordinates.map(([lng, lat]) => m.px(lng, lat));
+      ctx.beginPath();
+      c.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.strokeStyle = "rgba(12,58,96,0.55)";
+      ctx.lineWidth = 2.6 * u;
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(186,231,255,0.95)";
+      ctx.lineWidth = 1.3 * u;
+      ctx.stroke();
+      // flechas a lo largo de la línea
+      let acc = 0;
+      const every = 54 * u;
+      for (let i = 1; i < c.length; i++) {
+        const [x0, y0] = c[i - 1], [x1, y1] = c[i];
+        const L = Math.hypot(x1 - x0, y1 - y0);
+        acc += L;
+        if (acc < every || L === 0) continue;
+        acc = 0;
+        const ux = (x1 - x0) / L, uy = (y1 - y0) / L, a = 5.6 * u;
+        ctx.beginPath();
+        ctx.moveTo(x1 + ux * a, y1 + uy * a);
+        ctx.lineTo(x1 - ux * a - uy * a * 0.8, y1 - uy * a + ux * a * 0.8);
+        ctx.lineTo(x1 - ux * a + uy * a * 0.8, y1 - uy * a - ux * a * 0.8);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(225,245,255,1)";
+        ctx.strokeStyle = "rgba(12,58,96,0.7)";
+        ctx.lineWidth = 0.8 * u;
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
   if (crop === "entorno")
     for (const g of polys) {
       ctx.beginPath();
@@ -202,6 +228,84 @@ function drawOverlays(ctx: CanvasRenderingContext2D, m: Mosaic, o: Props["overla
       ctx.lineWidth = 2.2 * u;
       ctx.stroke();
     }
+  if (show.contours) contourLabels(ctx, m, o.contours, u, step);
+}
+
+/** Cota en todas las curvas, repetida a lo largo de cada una y sin solaparse. */
+function contourLabels(ctx: CanvasRenderingContext2D, m: Mosaic, fc: FeatureCollection, u: number, step: number) {
+  const size = Math.round(12 * u);
+  ctx.font = `600 ${size}px "Instrument Sans", system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const taken: [number, number, number, number][] = [];
+  const free = (x: number, y: number, w: number, h: number) => !taken.some(([a, b, c, d]) => x < c && x + w > a && y < d && y + h > b);
+  const dec = step < 0.5 ? 2 : step < 1 ? 1 : 0;
+  const spacing = Math.max(140 * u, Math.min(m.W, m.H) / 3.2);
+  for (const f of fc.features) {
+    const c = (f.geometry as GeoJSON.LineString).coordinates.map(([lng, lat]) => m.px(lng, lat));
+    const text = Number(f.properties?.z).toLocaleString("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    const tw = ctx.measureText(text).width + 6 * u, th = size + 4 * u;
+    let acc = spacing * 0.45;
+    for (let i = 1; i < c.length; i++) {
+      const [x0, y0] = c[i - 1], [x1, y1] = c[i];
+      acc += Math.hypot(x1 - x0, y1 - y0);
+      if (acc < spacing) continue;
+      const bx = x1 - tw / 2, by = y1 - th / 2;
+      if (bx < 0 || by < 0 || bx + tw > m.W || by + th > m.H || !free(bx, by, tw, th)) continue;
+      acc = 0;
+      taken.push([bx, by, bx + tw, by + th]);
+      let ang = Math.atan2(y1 - y0, x1 - x0);
+      if (ang > Math.PI / 2) ang -= Math.PI;
+      if (ang < -Math.PI / 2) ang += Math.PI;
+      ctx.save();
+      ctx.translate(x1, y1);
+      ctx.rotate(ang);
+      ctx.lineWidth = 3 * u;
+      ctx.strokeStyle = "rgba(20,32,26,0.8)";
+      ctx.strokeText(text, 0, 0);
+      ctx.fillStyle = "#FFF7E2";
+      ctx.fillText(text, 0, 0);
+      ctx.restore();
+    }
+  }
+}
+
+/** Fondo coloreado por cota o por pendiente (en vez de la ortofoto). */
+function drawTint(ctx: CanvasRenderingContext2D, m: Mosaic, d: Dem, hy: Hydro, base: Base, zmin: number, zmax: number) {
+  const k = 3;
+  const w = Math.ceil(m.W / k), h = Math.ceil(m.H / k);
+  const img = new ImageData(w, h);
+  const span = Math.max(0.01, zmax - zmin);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const [lng, lat] = m.ll((x + 0.5) * k, (y + 0.5) * k);
+      const [gx, gy] = d.fromLngLat(lng, lat);
+      const o = (y * w + x) * 4;
+      let rgb: [number, number, number] = [225, 220, 208];
+      if (base === "cotas") {
+        const v = sample(d, gx, gy);
+        if (!Number.isNaN(v)) rgb = rampColor((v - zmin) / span);
+      } else {
+        const i = Math.floor(gx), j = Math.floor(gy);
+        if (i >= 0 && j >= 0 && i < d.w && j < d.h) {
+          const sl = hy.slope[j * d.w + i] * 100;
+          const cls = SLOPE_CLASSES.find(([lim]) => sl < lim)!;
+          const hex = cls[1];
+          rgb = [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+        }
+      }
+      img.data[o] = rgb[0];
+      img.data[o + 1] = rgb[1];
+      img.data[o + 2] = rgb[2];
+      img.data[o + 3] = 255;
+    }
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  c.getContext("2d")!.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(c, 0, 0, m.W, m.H);
 }
 
 // ---------- componente ----------
@@ -522,20 +626,21 @@ export default function Maqueta(props: Props) {
         if (cur) cur[2]++;
         else edges.set(key, [a, b, 1, c]);
       }
-    const thick = Math.max(1, sizeM * 0.022);
-    const soil = thick * 0.3;
+    const thick = Math.max(1, sizeM * 0.03);
     const baseY = -thick;
+    const soilY = -thick * 0.62;
     // Paredes con vértices compartidos entre aristas vecinas: normales suavizadas, sin rayas
     const wp: number[] = [], wc: number[] = [], wi: number[] = [];
     const ring = new Map<number, number>(); // vértice del borde → primer índice de sus 4 vértices de pared
-    const cSoilTop = new THREE.Color("#7A5B40"), cSoil = new THREE.Color("#55402F"), cBase = new THREE.Color("#F2EEE6"), cBase2 = new THREE.Color("#DCD4C5");
+    const cSoilTop = new THREE.Color("#6B4A30"), cSoil = new THREE.Color("#9A7650"), cBase = new THREE.Color("#EFE8DB"), cBase2 = new THREE.Color("#D9CFBD");
     const wallVerts = (v: number) => {
       let k = ring.get(v);
       if (k != null) return k;
       k = wp.length / 3;
       ring.set(v, k);
       const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
-      wp.push(x, y, z, x, y - soil, z, x, y - soil, z, x, baseY, z);
+      // tierra marrón desde la superficie hasta un nivel fijo, y debajo el zócalo claro
+      wp.push(x, y, z, x, soilY, z, x, soilY, z, x, baseY, z);
       for (const c of [cSoilTop, cSoil, cBase, cBase2]) wc.push(c.r, c.g, c.b);
       return k;
     };
@@ -616,8 +721,9 @@ export default function Maqueta(props: Props) {
       c.width = mosaic.W;
       c.height = mosaic.H;
       const ctx = c.getContext("2d")!;
-      ctx.drawImage(base, 0, 0);
-      drawOverlays(ctx, mosaic, props.overlays, props.show, props.polys, props.crop);
+      if (props.base === "orto" || !region) ctx.drawImage(base, 0, 0);
+      else drawTint(ctx, mosaic, props.dem, props.hy, props.base, region.zmin, region.zmax);
+      drawOverlays(ctx, mosaic, props.overlays, props.show, props.polys, props.crop, props.step);
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = s.renderer.capabilities.getMaxAnisotropy();
@@ -631,7 +737,7 @@ export default function Maqueta(props: Props) {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mosaic, props.overlays, props.show.contours, props.show.streams, props.show.pools, props.crop]);
+  }, [mosaic, props.overlays, props.show.contours, props.show.streams, props.show.pools, props.show.flow, props.crop, props.base]);
 
   // Simulación del agua
   useEffect(() => {
